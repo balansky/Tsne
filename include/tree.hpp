@@ -93,7 +93,6 @@ protected:
         if (upper == lower) return nullptr;
 
         Node *node = new Node();
-        // node->pt = pts[lower];
 
         if(upper - lower > 1){
             int i = (int) ((double)rand() / RAND_MAX * (upper - lower - 1)) + lower;
@@ -122,18 +121,27 @@ protected:
 
     void insert(DataPoint &pt, Node *node){
         T dist = _distance->get(pt.val, node->pt.val);
-        if(node->radius != 0){
-            if(dist < node->radius){
+        if(dist < node->radius){
+            if(node->left)
+            {
                 insert(pt, node->left);
             }
             else{
-                insert(pt, node->right);
+                node->left = new Node();
+                node->left->pt = std::move(pt);
             }
         }
         else{
+            if(node->right){
+                insert(pt, node->right);
+            }
+            else{
+                node->right = new Node();
+                node->right->pt = std::move(pt);
+            }
+        }
+        if(node->radius == 0){
             node->radius = dist;
-            node->left = new Node();
-            node->left->pt = std::move(pt);
         }
     }
 
