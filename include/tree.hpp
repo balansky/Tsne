@@ -5,127 +5,34 @@
 #include <limits>
 #include <queue>
 #include <algorithm>
+#include <distance.hpp>
 
 namespace tsne{
-
-template<typename T>
-struct Distance{
-    ushort dim;
-    
-    Distance(): dim(0){}
-    explicit Distance(ushort dim):dim(dim){}
-    virtual ~Distance() = default;
-
-    virtual T get(const T* t1, const T* t2) const = 0;
-    
-
-};
-
-template<typename T>
-struct EuclideanDistance:Distance<T> {
-
-    EuclideanDistance(){}
-    explicit EuclideanDistance(int dim): Distance<T>(dim){}
-    ~EuclideanDistance() = default;
-
-    T get(const T* t1, const T* t2) const{
-            T dd = .0;
-            for(int d = 0; d < Distance<T>::dim; d++){
-                T t = (t1[d] - t2[d]);
-                dd += t * t;
-            }
-            return sqrt(dd);
-    }
-
-};
 
 
 template<typename T>
 class VpTree{
 
-public:
+private:
 
-    VpTree(): dim(0), n_total(0), _distance(nullptr),  _root(nullptr){}
-
-    explicit VpTree(ushort dim): dim(dim), n_total(0), _root(nullptr){
-        _distance = new EuclideanDistance<T>(dim);
-    }
-
-    VpTree(size_t n, ushort dim, const T *x): VpTree(dim){
-        n_total = n;
-        _distance = new EuclideanDistance<T>(dim);
-        auto *pts = new DataPoint[n];
-        for(int i = 0; i < n; i++){
-            pts[i] = std::move(DataPoint(i, dim, x + i*dim));
-        }
-        _root = insert(pts, 0, n);
-        delete []pts;
-    }
-
-    ~VpTree(){
-        delete _root;
-        delete _distance;
-    }
-
-
-
-    void search(const T *target, int k, std::vector<size_t> &results, std::vector<T> &distances){
-
-        std::priority_queue<HeapItem> heap;
-
-        // Variable that tracks the distance to the farthest point in our results
-        T tau = std::numeric_limits<T>::max();
-
-        // Perform the searcg
-        search(_root, target, k, heap, tau);
-
-        // Gather final results
-        results.clear(); distances.clear();
-        while (!heap.empty()) {
-            results.push_back(heap.top().index);
-            distances.push_back(heap.top().dist);
-            heap.pop();
-        }
-
-        // Results are in reverse order
-        std::reverse(results.begin(), results.end());
-        std::reverse(distances.begin(), distances.end());
-
-    }
+    ushort dim;
+    size_t n_total;
+    Distance<T> *_distance;
 
 protected:
 
-    Distance<T> *_distance;
-
     struct DataPoint{
         size_t index;
-        ushort dim;
         T *val;
 
-        DataPoint():index(0), dim(0), val(nullptr){}
+        DataPoint():index(0), val(nullptr){}
 
-        DataPoint(size_t i, ushort dim, const T *v): index(i), dim(dim){
+        DataPoint(size_t i, ushort dim, const T *v): index(i){
             val = new T[dim];
             memcpy(val, v, sizeof(T)*dim);
         }
 
-        DataPoint(const DataPoint &other):index(0), dim(0), val(nullptr){
-            *this = other;
-        }
-
-        DataPoint& operator =(const DataPoint &other){
-            if(this != &other){
-                T *tmp = new T[other.dim];
-                memcpy(tmp, other.val, sizeof(T)*other.dim);
-                delete val;
-                val = tmp;
-                index = other.index;
-                dim = other.dim;
-            }
-            return *this;
-        }
-
-        DataPoint(DataPoint &&other) noexcept: index(0), dim(0), val(nullptr){
+        DataPoint(DataPoint &&other) noexcept: DataPoint(){
             *this = std::move(other);
         }
 
@@ -134,7 +41,6 @@ protected:
             if(this != &other){
                 delete val;
                 index = other.index;
-                dim = other.dim;
                 val = other.val;
                 other.val = nullptr;
             }
@@ -153,8 +59,6 @@ protected:
         Node *right;
 
         Node(): radius(0),left(nullptr),right(nullptr){}
-
-        Node(DataPoint &pt, T r): radius(r), pt(pt), left(nullptr),right(nullptr){}
 
         ~Node(){
             delete left;
@@ -189,7 +93,7 @@ protected:
         if (upper == lower) return nullptr;
 
         Node *node = new Node();
-        node->pt = pts[lower];
+        // node->pt = pts[lower];
 
         if(upper - lower > 1){
             int i = (int) ((double)rand() / RAND_MAX * (upper - lower - 1)) + lower;
@@ -203,17 +107,34 @@ protected:
                              DistanceComparator(pts[lower], _distance));
 
             // Threshold of the new node will be the distance to the median
-//            const T *lower_pt = _data + indexes[lower]*dim;
-//            const T *median_pt = _data + indexes[median]*dim;
-            node->pt = pts[lower];
             node->radius = (_distance->get(pts[lower].val, pts[median].val));
+            node->pt = std::move(pts[lower]);
 
             // Recursively build tree
             node->left = insert(pts, lower + 1, median);
             node->right = insert(pts, median, upper);
-
+        }
+        else{
+            node->pt = std::move(pts[lower]);
         }
         return node;
+    }
+
+    void insert(DataPoint &pt, Node *node){
+        T dist = _distance->get(pt.val, node->pt.val);
+        if(node->radius != 0){
+            if(dist < node->radius){
+                insert(pt, node->left);
+            }
+            else{
+                insert(pt, node->right);
+            }
+        }
+        else{
+            node->radius = dist;
+            node->left = new Node();
+            node->left->pt = std::move(pt);
+        }
     }
 
     void search(Node *node, const T *target, unsigned int k, std::priority_queue<HeapItem>& heap, T& tau)
@@ -247,9 +168,59 @@ protected:
     }
 
 
-private:
-    ushort dim;
-    size_t n_total;
+public:
+
+    VpTree(): dim(0), n_total(0), _distance(nullptr),  _root(nullptr){}
+
+    explicit VpTree(ushort dim): dim(dim), _root(nullptr){
+        _distance = new EuclideanDistance<T>(dim);
+    }
+
+    VpTree(size_t n, ushort dim, const T *x): VpTree(dim){
+        this->n_total = n;
+        _distance = new EuclideanDistance<T>(dim);
+        auto *pts = new DataPoint[n];
+        for(size_t i = 0; i < n; i++){
+            pts[i] = std::move(DataPoint(i, dim, x + i*dim));
+        }
+        _root = insert(pts, 0, n);
+        delete []pts;
+    }
+
+    ~VpTree(){
+        delete _root;
+        delete _distance;
+    }
+
+    void insert(const T *inp, const size_t index){
+        DataPoint pt(index, dim, inp);
+        insert(pt, _root);
+    }
+
+    void search(const T *target, int k, std::vector<size_t> &results, std::vector<T> &distances){
+
+        std::priority_queue<HeapItem> heap;
+
+        // Variable that tracks the distance to the farthest point in our results
+        T tau = std::numeric_limits<T>::max();
+
+        // Perform the searcg
+        search(_root, target, k, heap, tau);
+
+        // Gather final results
+        results.clear(); distances.clear();
+        while (!heap.empty()) {
+            results.push_back(heap.top().index);
+            distances.push_back(heap.top().dist);
+            heap.pop();
+        }
+
+        // Results are in reverse order
+        std::reverse(results.begin(), results.end());
+        std::reverse(distances.begin(), distances.end());
+
+    }
+
 
 };
 
@@ -258,23 +229,26 @@ template <typename T>
 class BarnesHutTree{
 
     protected:
-    int n_dims;
+
+    int dim;
     int n_splits;
-    T *data;
+
     struct Cell {
-        int index;
-        int cum_size;
+
+        size_t cum_size;
         bool is_leaf;
         T *center;
         T *width;
         T *center_of_mass;
 	    std::vector<Cell*> children;
-        Cell():index(-1),cum_size(0),is_leaf(true), center(nullptr),width(nullptr),center_of_mass(nullptr){};
-        explicit Cell(int dims):Cell(){
-            center = (T*)calloc(dims, sizeof(T));
-            center_of_mass = (T*)calloc(dims, sizeof(T));
-            width = new T[dims]; 
+
+        Cell():cum_size(0),is_leaf(true), center(nullptr),width(nullptr),center_of_mass(nullptr){};
+
+        explicit Cell(int dim):Cell(){
+            center = (T*)calloc(dim, sizeof(T));
+            width = new T[dim];
         }
+
         Cell(int n, int dims, T *inp):Cell(dims){
             std::vector<T> min_Y(dims, std::numeric_limits<T>::max());
             std::vector<T> max_Y(dims, std::numeric_limits<T>::lowest());
@@ -300,9 +274,6 @@ class BarnesHutTree{
                 delete (*iter);
             }
         }
-
-        
-
     } *_root;
 
     inline static void getBits(int n, int bitswanted, int *bits){
@@ -316,7 +287,7 @@ class BarnesHutTree{
 
     inline bool containsPoint(Cell *cell, T *point) const
     {   
-        for (int i = 0; i< n_dims; ++i) {
+        for (int i = 0; i< dim; ++i) {
             if (std::abs(cell->center[i] - point[i]) > cell->width[i]) {
                 return false;
             }
@@ -325,19 +296,19 @@ class BarnesHutTree{
     }
 
     void subdivide(Cell *cell){
-        T *sub_centers = new T[2 * n_dims];
-        int *bits = new int[n_dims];
-        for(int i = 0; i < n_dims; ++i) {
+        T *sub_centers = new T[2 * dim];
+        int *bits = new int[dim];
+        for(int i = 0; i < dim; ++i) {
             sub_centers[i*2]     = cell->center[i] - .5 * cell->width[i];
             sub_centers[i*2 + 1] = cell->center[i] + .5 * cell->width[i];
         }
         cell->children.reserve(n_splits);
         
         for(int i = 0; i < n_splits; i++){
-            getBits(i, n_dims, bits);
-            Cell *child = new Cell(n_dims);
+            getBits(i, dim, bits);
+            Cell *child = new Cell(dim);
             // fill the means and width
-            for (int d = 0; d < n_dims; d++) {
+            for (int d = 0; d < dim; d++) {
                 child->center[d] = sub_centers[d*2 + bits[d]];
                 child->width[d] = .5*cell->width[d];
             }
@@ -348,55 +319,52 @@ class BarnesHutTree{
 
         // Move existing points to correct children
         for(int i = 0; i < n_splits; i++){
-            insert(cell->index, cell->children[i]);
+            if(insert(cell->center_of_mass, cell->children[i])){ break;}
         }
-        cell->index = -1;
         cell->is_leaf = false;
     }
 
-    bool isDuplicate(const T *point, const Cell *cell) const {
+    bool isDuplicate(const T *a_point, const T *b_point) const {
         bool duplicate = true;
-        for (int d = 0; d < n_dims; d++) {
-            if (point[d] != data[cell->index * n_dims + d]) { duplicate = false; break; }
+        for (int d = 0; d < dim; d++) {
+            if (a_point[d] != b_point[d]) { duplicate = false; break; }
         }
         return duplicate;
     }
 
-    bool insert(int idx, Cell *cell){
+    bool insert(T *point, Cell *cell){
 
-        T *point = data + idx*n_dims;
         if(!containsPoint(cell, point)){
             return false;
         }
 
         cell->cum_size++;
 
+        if(cell->is_leaf){
+            if(!cell->center_of_mass){
+                cell->center_of_mass = new T[dim];
+                memcpy(cell->center_of_mass, point, sizeof(T)*dim);
+                return true;
+            }
+            else if(isDuplicate(cell->center_of_mass, point)){
+                return true;
+            }
+            else{
+                subdivide(cell);
+            }
+
+        }
+
+        // update center mass of non-leaf cell
         T mult1 = (T) (cell->cum_size - 1) / (T) cell->cum_size;
         T mult2 = 1.0 / (T) cell->cum_size;
-        for (int d = 0; d < n_dims; d++) {
+        for (int d = 0; d < dim; d++) {
             cell->center_of_mass[d] = cell->center_of_mass[d] * mult1 + mult2 * point[d];
         }
 
-        // If there is space in this quad tree and it is a leaf, add the object here
-        if (cell->is_leaf && cell->index == -1) {
-            cell->index = idx;
-            return true;
-        }
-
-        // Don't add duplicates for now (this is not very nice)
-        
-        if (isDuplicate(point, cell)) {
-            return true;
-        }
-
-        // Otherwise, we need to subdivide the current cell
-        if (cell->is_leaf) {
-            subdivide(cell);
-
-            for (int i = 0; i < n_splits; ++i) {
-                if (insert(idx, cell->children[i])) {
-                    return true;
-                }
+        for (int i = 0; i < n_splits; ++i) {
+            if (insert(point, cell->children[i])) {
+                return true;
             }
         }
 
@@ -407,31 +375,31 @@ class BarnesHutTree{
 
     }
 
-	void computeNonEdgeForces(const T *point, const Cell *cell, const T theta, T* neg_f, T* sum_Q) const {
+	void computeNonEdgeForces(const T *point, const Cell *cell, const T theta, T* neg_f, T &sum_Q) const {
 
-        if (cell->cum_size == 0 || (cell->is_leaf && cell->index != -1 && isDuplicate(point, cell))) {
+        if (cell->cum_size == 0 || (cell->is_leaf && isDuplicate(cell->center_of_mass, point))) {
             return;
         }
         // Compute distance between point and center-of-mass
         T D = .0;
 
-        for (int d = 0; d < n_dims; d++) {
+        for (int d = 0; d < dim; d++) {
             double t  = point[d] - cell->center_of_mass[d];
             D += t * t;
         }
 
         // Check whether we can use this node as a "summary"
         T m = std::numeric_limits<T>::lowest();
-        for (int i = 0; i < n_dims; ++i) {
+        for (int i = 0; i < dim; ++i) {
             m = std::max(m, cell->width[i]);
         }
         if (cell->is_leaf || m / sqrt(D) < theta) {
 
             // Compute and add t-SNE force between point and current node
             T Q = 1.0 / (1.0 + D);
-            *sum_Q += cell->cum_size * Q;
+            sum_Q += cell->cum_size * Q;
             T mult = cell->cum_size * Q * Q;
-            for (int d = 0; d < n_dims; d++) {
+            for (int d = 0; d < dim; d++) {
                 neg_f[d] += mult * (point[d] - cell->center_of_mass[d]);
             }
         }
@@ -444,26 +412,23 @@ class BarnesHutTree{
     }
 
     public:
-    BarnesHutTree() = default;
-    BarnesHutTree(int n, int n_dims, T *data):n_dims(n_dims), data(data){
-        n_splits = 1 << n_dims;
-        _root = new Cell(n, n_dims, data);
+    BarnesHutTree():dim(0), n_splits(0), _root(nullptr){};
+    BarnesHutTree(int n, int dim, T *data):dim(dim){
+        n_splits = 1 << dim;
+        _root = new Cell(n, dim, data);
         for(int i = 0; i < n; i++){
-            insert(i, _root);
+            insert(data + i*dim, _root);
         }
     };
     ~BarnesHutTree(){
         delete _root;
     }
 
-    void appendN(int n, T *d){
-        data = d;
-        for(int i = 0; i < n; i++){
-            insert(_root->cum_size + i, _root);
-        }
+    bool insert(T *d){
+        insert(d, _root);
     }
 
-    void computeNonEdgeForces(const T *point, const T theta,  T *neg_f, T *sum_Q) const{
+    void computeNonEdgeForces(const T *point, const T theta,  T *neg_f, T &sum_Q) const{
         computeNonEdgeForces(point, _root, theta, neg_f, sum_Q);
     }
 

@@ -36,6 +36,7 @@ find_package(OpenMP 2 REQUIRED)
 
 add_library(tsne ${SOURCES})
 
+add_subdirectory(bh_tsne)
 add_subdirectory(test)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
