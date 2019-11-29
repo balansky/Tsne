@@ -9,11 +9,87 @@
 
 namespace tsne{
 
+template <typename T>
+class RedBlackTree{
+
+private:
+    size_t n;
+    ushort dim;
+    std::vector<T*> data;
+
+protected:
+    enum Color {RED, BLACK};
+
+    struct Node{
+        T radius;
+        bool color;
+        Node *left;
+        Node *right;
+        Node *parent;
+        std::vector<size_t> indices;
+
+        Node(): radius(0), color(RED), left(nullptr),right(nullptr), parent(nullptr){}
+
+        ~Node(){
+            delete left;
+            delete right;
+        }
+    } _root;
+
+    T _distance(const T* t1, const T* t2) const{
+        T dd = .0;
+        for(int d = 0; d < dim; d++){
+            T t = (t1[d] - t2[d]);
+            dd += t * t;
+        }
+        return sqrt(dd);
+    }
+
+    // todo update radius
+    void transplant(Node *v, Node *u){
+        if(!u->parent){
+            _root = v;
+        }
+        else if(u == u->parent->left){
+            u->parent->left = v;
+        }
+        else{
+            u->parent->right = v;
+        }
+        if(v){
+            v->parent = u->parent;
+        }
+
+    }
+    void leftRotate(){}
+    void rightRotate(Node *node){
+
+
+    }
+
+//    void insert()
+
+public:
+    RedBlackTree():n(0), dim(0){}
+    RedBlackTree(size_t n, ushort dim, T *inps): dim(dim){
+        for(size_t i = 0; i < n; i++){
+
+        }
+
+    }
+
+
+
+
+
+};
+
 
 template <typename T>
 class VantagePointTree{
 
     private:
+    size_t n;
     ushort dim;
     const std::vector<T*> *data;
     Distance<T> *_distance;
@@ -88,6 +164,7 @@ class VantagePointTree{
         else{
             node->index = pts[lower];
         }
+        n++;
         return node;
     }
 
@@ -150,9 +227,9 @@ class VantagePointTree{
 
     public:
 
-    VantagePointTree(): dim(0), _distance(nullptr),  _root(nullptr), data(nullptr){}
+    VantagePointTree(): n(0), dim(0), _distance(nullptr),  _root(nullptr), data(nullptr){}
 
-    explicit VantagePointTree(ushort dim): dim(dim), _root(nullptr), data(nullptr){
+    explicit VantagePointTree(ushort dim): n(0), dim(dim), _root(nullptr), data(nullptr){
         _distance = new EuclideanDistance<T>(dim);
     }
 
