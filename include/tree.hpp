@@ -34,7 +34,7 @@ protected:
             delete left;
             delete right;
         }
-    } _root;
+    } *_root;
 
     T _distance(const T* t1, const T* t2) const{
         T dd = .0;
@@ -45,37 +45,102 @@ protected:
         return sqrt(dd);
     }
 
-    // todo update radius
-    void transplant(Node *v, Node *u){
-        if(!u->parent){
-            _root = v;
+    void leftRotate(Node *x){
+        Node *y = x->right;
+        x->right = y->left;
+        if(y->left){
+            y->left->parent = x;
         }
-        else if(u == u->parent->left){
-            u->parent->left = v;
+        y->parent = x->parent;
+        if(!x->parent){
+            _root = y;
+        }
+        else if(x->parent->left == x){
+            x->parent->left = y;
         }
         else{
-            u->parent->right = v;
+            x->parent->right = y;
         }
-        if(v){
-            v->parent = u->parent;
-        }
-
-    }
-    void leftRotate(){}
-    void rightRotate(Node *node){
-
-
+        y->left = x;
+        x->parent = y;
     }
 
-//    void insert()
+    void rightRotate(Node *x){
+
+        Node *y = x->left;
+        x->left = y->right;
+        if(y->right){
+            y->right->parent = x;
+        }
+        y->parent = x->parent;
+        if(!x->parent){
+            _root = y;
+        }
+        else if(x->parent->left == x){
+            x->parent->left = y;
+        }
+        else{
+            x->parent->right = y;
+        }
+
+        y->right = x;
+        x->parent = y;
+
+    }
+
+    void insert(Node *node, size_t i, T *v){
+        if(node->indices.empty()){
+            node->indices.push_back(i);
+        }
+        else{
+            T dist = _distance(data[node->indices[0]], v);
+            if(dist < node->radius){
+                if(node->left){
+                    insert(node->left, i, v);
+                }
+                else{
+                    Node *nd = new Node();
+                    nd->indices.push_back(i);
+                    nd->parent = node;
+                    node->left = nd;
+                }
+
+            }
+            else if(dist == 0){
+                node->indices.push_back(i);
+            }
+            else{
+                if(node->right){
+                    insert(node->right, i, v);
+                }
+                else{
+                    Node *nd = new Node();
+                    nd->indices.push_back(i);
+                    nd->parent = node;
+                    node->right = nd;
+                    node->radius = dist;
+                }
+            }
+        }
+    }
 
 public:
     RedBlackTree():n(0), dim(0){}
     RedBlackTree(size_t n, ushort dim, T *inps): dim(dim){
         for(size_t i = 0; i < n; i++){
-
+            T *v = new T[dim];
+            memcpy(v, inps + i * dim, sizeof(T)*dim);
+            data.push_back(v);
+            insert(_root, i, v);
         }
 
+    }
+
+    ~RedBlackTree(){
+        for(auto iter = data.begin(); iter != data.end(); iter++){
+            delete (*iter);
+        }
+        delete _root;
     }
 
 
