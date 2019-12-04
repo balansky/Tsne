@@ -21,8 +21,8 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         int k = 10;
         std::unique_ptr<float[]> rnd_f = std::unique_ptr<float[]>(new float[nx*dim]);
         std::unique_ptr<float[]> rnd_qf = std::unique_ptr<float[]>(new float[dim]);
-        simile::float_rand(rnd_f.get(), nx*dim, 1988);
-        simile::float_rand(rnd_qf.get(), dim, 1989);
+        simile::float_rand(rnd_f.get(), nx*dim, 2023);
+        simile::float_rand(rnd_qf.get(), dim, 1231);
 
         std::unique_ptr<double[]> rnd_d = std::unique_ptr<double[]>(new double[nx*dim]);
         std::unique_ptr<double[]> rnd_qd = std::unique_ptr<double[]>(new double[dim]);
@@ -42,7 +42,9 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
             rnd_vd.push_back(rnd_d.get() + i*dim);
 
         }
-        tsne::VantagePointTree<double> tree(dim, &rnd_vd);
+
+        tsne::RedBlackTree<double> tree(nx, dim, rnd_d.get());
+//        tsne::VantagePointTree<double> tree(dim, &rnd_vd);
         tree.search(rnd_qd.get(), k, res_ids, res_dists);
 
 

@@ -13,7 +13,6 @@ template <typename T>
 class RedBlackTree{
 
 private:
-    size_t n;
     ushort dim;
     std::vector<T*> data;
 
@@ -29,6 +28,10 @@ protected:
         std::vector<size_t> indices;
 
         Node(): radius(0), color(RED), left(nullptr),right(nullptr), parent(nullptr){}
+        Node(size_t i, Node *p):Node(){
+            indices.push_back(i);
+            parent = p;
+        }
 
         ~Node(){
             delete left;
@@ -45,11 +48,25 @@ protected:
         return sqrt(dd);
     }
 
+    struct HeapItem {
+
+        HeapItem( size_t index, T dist) : index(index), dist(dist) {}
+        size_t index;
+        T dist;
+        bool operator<(const HeapItem& o) const {
+            return dist < o.dist;
+        }
+    };
+
     void leftRotate(Node *x){
         Node *y = x->right;
         x->right = y->left;
         if(y->left){
             y->left->parent = x;
+            x->radius = _distance(data[x->indices[0]], data[y->left->indices[0]]);
+        }
+        else{
+            x->radius = 0;
         }
         y->parent = x->parent;
         if(!x->parent){
@@ -63,6 +80,7 @@ protected:
         }
         y->left = x;
         x->parent = y;
+        std::swap(x->color, y->color);
     }
 
     void rightRotate(Node *x){
@@ -85,55 +103,126 @@ protected:
 
         y->right = x;
         x->parent = y;
+        y->radius = _distance(data[y->indices[0]], data[x->indices[0]]);
+        std::swap(x->color, y->color);
+
+    }
+
+    Node* getUncle(Node *node){
+        Node *parent = node->parent;
+        if(parent){
+            Node *grandpa = parent->parent;
+            if(grandpa){
+                if(grandpa->left == parent){
+                    return grandpa->right;
+                }
+                else{
+                    return grandpa->left;
+                }
+            }
+            return nullptr;
+        }
+        return nullptr;
+    }
+
+    void balanceTree(Node *node){
+        if(node->parent->color == RED){
+            Node *uncle = getUncle(node);
+            if(!uncle || uncle->color == BLACK){
+                //left left case
+                if(node->parent->parent->left == node->parent && node->parent->left == node){
+                    rightRotate(node->parent->parent);
+                }
+                //left right case
+                else if(node->parent->parent->left == node->parent && node->parent->right == node){
+                    leftRotate(node->parent);
+                    rightRotate(node->parent);
+                }
+                // right right case
+                else if(node->parent->parent->right == node->parent && node->parent->right == node){
+                    leftRotate(node->parent->parent);
+                }
+                // right left case
+                else{
+                    rightRotate(node->parent);
+                    leftRotate(node->parent);
+                }
+            }
+            else{
+                node->parent->color = BLACK;
+                uncle->color = BLACK;
+                if(node->parent->parent != _root){
+                    node->parent->parent->color = RED;
+                    balanceTree(node->parent->parent);
+                }
+            }
+        }
 
     }
 
     void insert(Node *node, size_t i, T *v){
-        if(node->indices.empty()){
+        T dist = _distance(data[node->indices[0]], v);
+        if(dist < node->radius){
+            if(node->left){
+                insert(node->left, i, v);
+            }
+            else{
+                Node *nd = new Node(i, node);
+                node->left = nd;
+                balanceTree(nd);
+            }
+
+        }
+        else if(dist == 0){
             node->indices.push_back(i);
         }
         else{
-            T dist = _distance(data[node->indices[0]], v);
-            if(dist < node->radius){
-                if(node->left){
-                    insert(node->left, i, v);
-                }
-                else{
-                    Node *nd = new Node();
-                    nd->indices.push_back(i);
-                    nd->parent = node;
-                    node->left = nd;
-                }
-
-            }
-            else if(dist == 0){
-                node->indices.push_back(i);
+            if(node->right){
+                insert(node->right, i, v);
             }
             else{
-                if(node->right){
-                    insert(node->right, i, v);
-                }
-                else{
-                    Node *nd = new Node();
-                    nd->indices.push_back(i);
-                    nd->parent = node;
-                    node->right = nd;
-                    node->radius = dist;
-                }
+                Node *nd = new Node(i, node);
+                node->right = nd;
+                if(node->radius == 0) node->radius = dist;
+                balanceTree(nd);
             }
         }
     }
 
-public:
-    RedBlackTree():n(0), dim(0){}
-    RedBlackTree(size_t n, ushort dim, T *inps): dim(dim){
-        for(size_t i = 0; i < n; i++){
-            T *v = new T[dim];
-            memcpy(v, inps + i * dim, sizeof(T)*dim);
-            data.push_back(v);
-            insert(_root, i, v);
+    void search(Node *node, const T *target, unsigned int k, std::priority_queue<HeapItem>& heap, T& tau)
+    {
+        if (!node) return;    // indicates that we're done here
+
+        // Compute distance between target and current node
+        T dist = _distance(data[node->indices[0]], target);
+
+        // If current node within radius tau
+        if (dist < tau) {
+            if (heap.size() == k) heap.pop();                // remove furthest node from result list (if we already have k results)
+            heap.push(HeapItem(node->indices[0], dist));           // add current node to result list
+            if (heap.size() == k) tau = heap.top().dist;    // update value of tau (farthest point in result list)
         }
 
+        // Return if we arrived at a leaf
+        if (!node->left && !node->right) {
+            return;
+        }
+
+        // if node is laied inside or intersect with the search radius
+        if(dist <= tau || dist - node->radius <= tau){
+            search(node->left, target, k, heap, tau);
+            search(node->right, target, k, heap, tau);
+        }
+            // if node is laied outside of the search radius
+        else if(dist - node->radius > tau){
+            search(node->right, target, k, heap, tau);
+        }
+    }
+
+public:
+    RedBlackTree():dim(0), _root(nullptr){}
+    RedBlackTree(size_t n, ushort dim, T *inps): dim(dim), _root(nullptr){
+        insert(n, inps);
     }
 
     ~RedBlackTree(){
@@ -143,7 +232,43 @@ public:
         delete _root;
     }
 
+    void search(const T *target, int k, std::vector<size_t> &results, std::vector<T> &distances){
 
+        std::priority_queue<HeapItem> heap;
+
+        // Variable that tracks the distance to the farthest point in our results
+        T tau = std::numeric_limits<T>::max();
+
+        // Perform the searcg
+        search(_root, target, k, heap, tau);
+
+        // Gather final results
+        results.clear(); distances.clear();
+        while (!heap.empty()) {
+            results.push_back(heap.top().index);
+            distances.push_back(heap.top().dist);
+            heap.pop();
+        }
+
+        // Results are in reverse order
+        std::reverse(results.begin(), results.end());
+        std::reverse(distances.begin(), distances.end());
+    }
+
+    void insert(size_t n, T *inps){
+        for(size_t i = 0; i < n; i++){
+            T *v = new T[dim];
+            memcpy(v, inps + i * dim, sizeof(T)*dim);
+            data.push_back(v);
+            if(!_root){
+                _root = new Node(i, nullptr);
+                _root->color = BLACK;
+            }
+            else{
+                insert(_root, i, v);
+            }
+        }
+    }
 
 
 
