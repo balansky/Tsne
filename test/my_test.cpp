@@ -37,14 +37,21 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         std::vector<size_t> res_ids;
         std::vector<double> res_dists;
 //        tsne::VpTree<double> tree(nx, dim, rnd_d.get());
-        std::vector<double*> rnd_vd;
+        std::vector<double> rnd_vd(rnd_d.get(), rnd_d.get() + nx*dim);
+
+//        for(int i = 0; i < nx; i++){
+//            rnd_vd.push_back(rnd_d.get() + i*dim);
+//
+//        }
+        rnd_vd.insert(rnd_vd.end(), rnd_d.get(), rnd_d.get() + dim);
+        std::vector<size_t> dummy_ids;
         for(int i = 0; i < nx; i++){
-            rnd_vd.push_back(rnd_d.get() + i*dim);
-
+            dummy_ids.push_back(i);
         }
+        dummy_ids.push_back(nx);
 
-        tsne::RedBlackTree<double> tree(nx, dim, rnd_d.get());
-//        tsne::VantagePointTree<double> tree(dim, &rnd_vd);
+
+        tsne::RedBlackTree<size_t, double> tree(nx + 1, dim, dummy_ids.data(), rnd_vd.data());
         tree.search(rnd_qd.get(), k, res_ids, res_dists);
 
 

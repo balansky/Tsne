@@ -9,49 +9,62 @@
 
 namespace tsne{
 
-template <typename T>
+
+template <typename I=size_t, typename T=float>
 class RedBlackTree{
 
 private:
-    ushort dim;
-    std::vector<T*> data;
-
-protected:
     enum Color {RED, BLACK};
 
     struct Node{
         T radius;
+        T *v;
         bool color;
         Node *left;
         Node *right;
         Node *parent;
-        std::vector<size_t> indices;
+        std::vector<I> indices;
 
-        Node(): radius(0), color(RED), left(nullptr),right(nullptr), parent(nullptr){}
-        Node(size_t i, Node *p):Node(){
+        Node(): radius(0), color(RED), v(nullptr), left(nullptr),right(nullptr), parent(nullptr){}
+        Node(ushort dim, I i, T *val):Node(){
+            v = new T[dim];
+            memcpy(v, val, sizeof(T)*dim);
             indices.push_back(i);
-            parent = p;
         }
 
         ~Node(){
             delete left;
             delete right;
+            delete v;
         }
     } *_root;
 
-    T _distance(const T* t1, const T* t2) const{
+    ushort dim;
+    std::vector<Node*> data;
+    size_t n_total;
+    T *mean;
+    T max_v;
+
+protected:
+
+    T distance(const T* t1, const T* t2, bool norm=false) const{
         T dd = .0;
         for(int d = 0; d < dim; d++){
             T t = (t1[d] - t2[d]);
             dd += t * t;
         }
-        return sqrt(dd);
+        if(norm){
+            return sqrt(dd) / max_v;
+        }
+        else{
+            return sqrt(dd);
+        }
     }
 
     struct HeapItem {
 
-        HeapItem( size_t index, T dist) : index(index), dist(dist) {}
-        size_t index;
+        HeapItem( I index, T dist) : index(index), dist(dist) {}
+        I index;
         T dist;
         bool operator<(const HeapItem& o) const {
             return dist < o.dist;
@@ -63,7 +76,7 @@ protected:
         x->right = y->left;
         if(y->left){
             y->left->parent = x;
-            x->radius = _distance(data[x->indices[0]], data[y->left->indices[0]]);
+            x->radius = distance(x->v, y->v);
         }
         else{
             x->radius = 0;
@@ -103,7 +116,7 @@ protected:
 
         y->right = x;
         x->parent = y;
-        y->radius = _distance(data[y->indices[0]], data[x->indices[0]]);
+        y->radius = distance(y->v, x->v);
         std::swap(x->color, y->color);
 
     }
@@ -160,33 +173,35 @@ protected:
 
     }
 
-    void insert(Node *node, size_t i, T *v){
-        T dist = _distance(data[node->indices[0]], v);
-        if(dist < node->radius){
-            if(node->left){
-                insert(node->left, i, v);
+    Node* insert(Node *parent, Node *node){
+        T dist = distance(parent->v, node->v);
+        if(dist == 0){
+            parent->indices.push_back(node->indices[0]);
+            delete node;
+            node = parent;
+        }
+        else if(dist < parent->radius){
+            if(parent->left){
+                node = insert(parent->left, node);
             }
             else{
-                Node *nd = new Node(i, node);
-                node->left = nd;
-                balanceTree(nd);
+                node->parent = parent;
+                parent->left = node;
+                balanceTree(node);
             }
-
-        }
-        else if(dist == 0){
-            node->indices.push_back(i);
         }
         else{
-            if(node->right){
-                insert(node->right, i, v);
+            if(parent->right){
+                node = insert(parent->right, node);
             }
             else{
-                Node *nd = new Node(i, node);
-                node->right = nd;
-                if(node->radius == 0) node->radius = dist;
-                balanceTree(nd);
+                node->parent = parent;
+                parent->right = node;
+                if(parent->radius == 0) parent->radius = dist;
+                balanceTree(node);
             }
         }
+        return node;
     }
 
     void search(Node *node, const T *target, unsigned int k, std::priority_queue<HeapItem>& heap, T& tau)
@@ -194,7 +209,7 @@ protected:
         if (!node) return;    // indicates that we're done here
 
         // Compute distance between target and current node
-        T dist = _distance(data[node->indices[0]], target);
+        T dist = distance(node->v, target);
 
         // If current node within radius tau
         if (dist < tau) {
@@ -220,19 +235,19 @@ protected:
     }
 
 public:
-    RedBlackTree():dim(0), _root(nullptr){}
-    RedBlackTree(size_t n, ushort dim, T *inps): dim(dim), _root(nullptr){
-        insert(n, inps);
+    RedBlackTree(): n_total(0), dim(0), max_v(0), _root(nullptr), mean(nullptr){}
+    RedBlackTree(size_t n, ushort dim, I *ids, T *inps): RedBlackTree(){
+        this->dim = dim;
+        mean = (T*) calloc(dim,sizeof(T));
+        insert(n, ids, inps);
     }
 
     ~RedBlackTree(){
-        for(auto iter = data.begin(); iter != data.end(); iter++){
-            delete (*iter);
-        }
         delete _root;
+        delete mean;
     }
 
-    void search(const T *target, int k, std::vector<size_t> &results, std::vector<T> &distances){
+    void search(const T *target, int k, std::vector<I> &results, std::vector<T> &distances){
 
         std::priority_queue<HeapItem> heap;
 
@@ -255,220 +270,27 @@ public:
         std::reverse(distances.begin(), distances.end());
     }
 
-    void insert(size_t n, T *inps){
+    void insert(size_t n, I *ids, T *inps){
         for(size_t i = 0; i < n; i++){
-            T *v = new T[dim];
-            memcpy(v, inps + i * dim, sizeof(T)*dim);
-            data.push_back(v);
+            Node *node = new Node(dim, ids[i], inps + i*dim);
             if(!_root){
-                _root = new Node(i, nullptr);
+                _root = node;
                 _root->color = BLACK;
             }
             else{
-                insert(_root, i, v);
+                node = insert(_root, node);
+            }
+            data.push_back(node);
+            n_total++;
+            for(ushort d = 0; d < dim; d++){
+                mean[d] = mean[d] * (T(n_total - 1.0) / T(n_total)) + (node->v[d] * (1.0 / T(n_total)));
+                if(fabs(node->v[d]) > max_v){
+                    max_v = fabs(node->v[d]);
+                }
             }
         }
     }
 
-
-
-};
-
-
-template <typename T>
-class VantagePointTree{
-
-    private:
-    size_t n;
-    ushort dim;
-    const std::vector<T*> *data;
-    Distance<T> *_distance;
-
-    protected:
-
-    struct Node{
-        T radius;
-        size_t index;
-        Node *left;
-        Node *right;
-
-        Node(): radius(0),left(nullptr),right(nullptr){}
-
-        ~Node(){
-            delete left;
-            delete right;
-        }
-
-    } *_root;
-
-    struct HeapItem {
-
-        HeapItem( size_t index, T dist) : index(index), dist(dist) {}
-        size_t index;
-        T dist;
-        bool operator<(const HeapItem& o) const {
-            return dist < o.dist;
-        }
-    };
-
-    struct DistanceComparator
-    {
-        size_t anchor_i;
-        const std::vector<T*> *d;
-        Distance<T> *dist;
-
-        DistanceComparator(size_t i, const std::vector<T*> *din, Distance<T> *dist) : anchor_i(i), dist(dist) {
-            d = din;
-        }
-
-        bool operator()(const size_t a, const size_t b) {
-
-            return dist->get((*d)[anchor_i], (*d)[a]) < dist->get((*d)[anchor_i], (*d)[b]);
-        }
-    };
-
-    Node* insert(size_t *pts, size_t lower, size_t upper){
-        if (upper == lower) return nullptr;
-
-        Node *node = new Node();
-
-        if(upper - lower > 1){
-            int i = (int) ((double)rand() / RAND_MAX * (upper - lower - 1)) + lower;
-            std::swap(pts[lower], pts[i]);
-
-            // Partition around the median distance
-            int median = (upper + lower) / 2;
-            std::nth_element(pts + lower + 1,
-                             pts + median,
-                             pts + upper,
-                             DistanceComparator(pts[lower], data, _distance));
-
-            // Threshold of the new node will be the distance to the median
-            node->radius = (_distance->get((*data)[pts[lower]], (*data)[pts[median]]));
-            node->index = pts[lower];
-
-            // Recursively build tree
-            node->left = insert(pts, lower + 1, median);
-            node->right = insert(pts, median, upper);
-        }
-        else{
-            node->index = pts[lower];
-        }
-        n++;
-        return node;
-    }
-
-    void insert(size_t i, Node *node){
-        T dist = _distance->get((*data)[i], (*data)[node->index]);
-        if(dist < node->radius){
-            if(node->left)
-            {
-                insert(i, node->left);
-            }
-            else{
-                node->left = new Node();
-                node->left->index = i;
-            }
-        }
-        else{
-            if(node->right){
-                insert(i, node->right);
-            }
-            else{
-                node->right = new Node();
-                node->right->index = i;
-            }
-        }
-        if(node->radius == 0){
-            node->radius = dist;
-        }
-    }
-
-    void search(Node *node, const T *target, unsigned int k, std::priority_queue<HeapItem>& heap, T& tau)
-    {
-        if (node == NULL) return;    // indicates that we're done here
-
-        // Compute distance between target and current node
-        T dist = _distance->get((*data)[node->index], target);
-
-        // If current node within radius tau
-        if (dist < tau) {
-            if (heap.size() == k) heap.pop();                // remove furthest node from result list (if we already have k results)
-            heap.push(HeapItem(node->index, dist));           // add current node to result list
-            if (heap.size() == k) tau = heap.top().dist;    // update value of tau (farthest point in result list)
-        }
-
-        // Return if we arrived at a leaf
-        if (node->left == NULL && node->right == NULL) {
-            return;
-        }
-
-        // if node is laied inside or intersect with the search radius
-        if(dist <= tau || dist - node->radius <= tau){
-            search(node->left, target, k, heap, tau);
-            search(node->right, target, k, heap, tau);
-        }
-            // if node is laied outside of the search radius
-        else if(dist - node->radius > tau){
-            search(node->right, target, k, heap, tau);
-        }
-    }
-
-
-    public:
-
-    VantagePointTree(): n(0), dim(0), _distance(nullptr),  _root(nullptr), data(nullptr){}
-
-    explicit VantagePointTree(ushort dim): n(0), dim(dim), _root(nullptr), data(nullptr){
-        _distance = new EuclideanDistance<T>(dim);
-    }
-
-    VantagePointTree(ushort dim, const std::vector<T*> *d): VantagePointTree(dim){
-        data = d;
-        _distance = new EuclideanDistance<T>(dim);
-
-        size_t *pts = new size_t[data->size()];
-        for(size_t i = 0; i < data->size(); i++){
-            pts[i] = i;
-        }
-        _root = insert(pts, 0, data->size());
-        delete []pts;
-    }
-
-    ~VantagePointTree(){
-        delete _root;
-        delete _distance;
-    }
-
-    void insert(size_t n, const size_t *inp, const size_t index){
-        for(size_t i = 0; i < n; i++){
-            insert(inp[i], _root);
-        }
-    }
-
-    void search(const T *target, int k, std::vector<size_t> &results, std::vector<T> &distances){
-
-        std::priority_queue<HeapItem> heap;
-
-        // Variable that tracks the distance to the farthest point in our results
-        T tau = std::numeric_limits<T>::max();
-
-        // Perform the searcg
-        search(_root, target, k, heap, tau);
-
-        // Gather final results
-        results.clear(); distances.clear();
-        while (!heap.empty()) {
-            results.push_back(heap.top().index);
-            distances.push_back(heap.top().dist);
-            heap.pop();
-        }
-
-        // Results are in reverse order
-        std::reverse(results.begin(), results.end());
-        std::reverse(distances.begin(), distances.end());
-
-    }
 
 
 };
