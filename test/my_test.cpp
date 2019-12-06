@@ -11,6 +11,7 @@
 // #include <tsne.h>
 #include <tree.hpp>
 #include <rand.hpp>
+#include <tsne.hpp>
 
 
 BOOST_AUTO_TEST_SUITE(tsne_test)
@@ -37,13 +38,19 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         std::vector<size_t> res_ids;
         std::vector<double> res_dists;
 //        tsne::VpTree<double> tree(nx, dim, rnd_d.get());
-        std::vector<double> rnd_vd(rnd_d.get(), rnd_d.get() + nx*dim);
+        std::vector<double*> rnd_vd;
+        for(int i = 0; i < nx; i++){
+//            double *d = new double[dim];
+//            memcpy(d, rnd_d.get() + i*dim, dim);
+            rnd_vd.push_back(rnd_d.get() + i*dim);
+        }
+        rnd_vd.push_back(rnd_d.get());
 
 //        for(int i = 0; i < nx; i++){
 //            rnd_vd.push_back(rnd_d.get() + i*dim);
 //
 //        }
-        rnd_vd.insert(rnd_vd.end(), rnd_d.get(), rnd_d.get() + dim);
+//        rnd_vd.insert(rnd_vd.end(), rnd_d.get(), rnd_d.get() + dim);
         std::vector<size_t> dummy_ids;
         for(int i = 0; i < nx; i++){
             dummy_ids.push_back(i);
@@ -101,6 +108,22 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         }
 
         BOOST_CHECK_EQUAL(s_q, s_qq);
+
+    }
+
+    BOOST_AUTO_TEST_CASE(tsne_construct_test){
+
+        int nx = 1000;
+        int x_dim = 512;
+        int y_dim = 2;
+        std::unique_ptr<float[]> rnd_x = std::unique_ptr<float[]>(new float[nx*x_dim]);
+        simile::float_rand(rnd_x.get(), nx*x_dim, 1988);
+
+        std::unique_ptr<float[]> rnd_y = std::unique_ptr<float[]>(new float[nx*y_dim]);
+        simile::float_rand(rnd_y.get(), nx*y_dim, 1982);
+
+        tsne::TSNE<float> ts(nx, x_dim, y_dim,rnd_x.get(), rnd_y.get());
+
 
     }
 

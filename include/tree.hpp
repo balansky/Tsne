@@ -26,16 +26,14 @@ private:
         std::vector<I> indices;
 
         Node(): radius(0), color(RED), v(nullptr), left(nullptr),right(nullptr), parent(nullptr){}
-        Node(ushort dim, I i, T *val):Node(){
-            v = new T[dim];
-            memcpy(v, val, sizeof(T)*dim);
+        Node(I i, T *val):Node(){
+            v = val;
             indices.push_back(i);
         }
 
         ~Node(){
             delete left;
             delete right;
-            delete v;
         }
     } *_root;
 
@@ -47,18 +45,13 @@ private:
 
 protected:
 
-    T distance(const T* t1, const T* t2, bool norm=false) const{
+    T distance(const T* t1, const T* t2) const{
         T dd = .0;
         for(int d = 0; d < dim; d++){
             T t = (t1[d] - t2[d]);
             dd += t * t;
         }
-        if(norm){
-            return sqrt(dd) / max_v;
-        }
-        else{
-            return sqrt(dd);
-        }
+        return sqrt(dd);
     }
 
     struct HeapItem {
@@ -236,9 +229,10 @@ protected:
 
 public:
     RedBlackTree(): n_total(0), dim(0), max_v(0), _root(nullptr), mean(nullptr){}
-    RedBlackTree(size_t n, ushort dim, I *ids, T *inps): RedBlackTree(){
-        this->dim = dim;
+    explicit RedBlackTree(ushort dim): n_total(0), dim(dim), max_v(0), _root(nullptr){
         mean = (T*) calloc(dim,sizeof(T));
+    }
+    RedBlackTree(size_t n, ushort dim, I *ids, T **inps): RedBlackTree(dim){
         insert(n, ids, inps);
     }
 
@@ -247,7 +241,7 @@ public:
         delete mean;
     }
 
-    void search(const T *target, int k, std::vector<I> &results, std::vector<T> &distances){
+    void search(const T *target, int k, std::vector<I> &results, std::vector<T> &distances, bool norm=false){
 
         std::priority_queue<HeapItem> heap;
 
@@ -260,8 +254,10 @@ public:
         // Gather final results
         results.clear(); distances.clear();
         while (!heap.empty()) {
+            T dist = heap.top().dist;
+            if(norm) dist /= max_v;
             results.push_back(heap.top().index);
-            distances.push_back(heap.top().dist);
+            distances.push_back(dist);
             heap.pop();
         }
 
@@ -270,9 +266,9 @@ public:
         std::reverse(distances.begin(), distances.end());
     }
 
-    void insert(size_t n, I *ids, T *inps){
+    void insert(size_t n, I *ids, T **inps){
         for(size_t i = 0; i < n; i++){
-            Node *node = new Node(dim, ids[i], inps + i*dim);
+            Node *node = new Node(ids[i], inps[i]);
             if(!_root){
                 _root = node;
                 _root->color = BLACK;
@@ -290,7 +286,6 @@ public:
             }
         }
     }
-
 
 
 };
@@ -523,7 +518,7 @@ class BarnesHutTree{
 
     protected:
 
-    int dim;
+    ushort dim;
     int n_splits;
 
     struct Cell {
@@ -537,17 +532,17 @@ class BarnesHutTree{
 
         Cell():cum_size(0),is_leaf(true), center(nullptr),width(nullptr),center_of_mass(nullptr){};
 
-        explicit Cell(int dim):Cell(){
+        explicit Cell(ushort dim):Cell(){
             center = (T*)calloc(dim, sizeof(T));
             width = new T[dim];
         }
 
-        Cell(int n, int dims, T *inp):Cell(dims){
+        Cell(size_t n, ushort dims, T *inp):Cell(dims){
             std::vector<T> min_Y(dims, std::numeric_limits<T>::max());
             std::vector<T> max_Y(dims, std::numeric_limits<T>::lowest());
 
-            for(int i = 0; i < n; i++){
-                for(int j = 0; j < dims; j++){
+            for(size_t i = 0; i < n; i++){
+                for(ushort j = 0; j < dims; j++){
                     center[j] += inp[j + i*dims];
                     min_Y[j] = std::min<T>(min_Y[j], inp[j + i*dims]);
                     max_Y[j] = std::max<T>(max_Y[j], inp[j + i*dims]);
@@ -706,10 +701,13 @@ class BarnesHutTree{
 
     public:
     BarnesHutTree():dim(0), n_splits(0), _root(nullptr){};
-    BarnesHutTree(int n, int dim, T *data):dim(dim){
+    explicit BarnesHutTree(ushort dim): dim(dim), _root(nullptr){
         n_splits = 1 << dim;
+    }
+    BarnesHutTree(size_t n, ushort dim, T *data):BarnesHutTree(dim){
         _root = new Cell(n, dim, data);
-        for(int i = 0; i < n; i++){
+
+        for(size_t i = 0; i < n; i++){
             insert(data + i*dim, _root);
         }
     };

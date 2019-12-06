@@ -16,10 +16,9 @@ class TSNE{
 
     ushort x_dim;
     ushort y_dim;
-    VpTree<T> *vp_tree;
     std::vector<T*> X;
     std::vector<T*> Y;
-    T* X_mean;
+    RedBlackTree<size_t, T> *rb_tree;
 
     struct Matrix{
         size_t n_rows;
@@ -43,21 +42,34 @@ class TSNE{
         void makeSymmtric();
     };
 
-    void initX(size_t n, T *x);
+//    void initX(size_t n, T *x);
     void computeGradient();
     void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
     void computeGaussianPerplexity(size_t n, size_t k, T perplexity, T *x, Matrix &mat);
 
-    void zeroMean(size_t n, ushort d, T *mean, T **inp);
 
     public:
 
-    TSNE():x_dim(0), y_dim(0), vp_tree(nullptr), X_mean(nullptr){}
+    TSNE():x_dim(0), y_dim(0){}
 
-    explicit TSNE(ushort x_dim, ushort y_dim): x_dim(x_dim), y_dim(y_dim), vp_tree(nullptr), X_mean(nullptr){}
+    TSNE(ushort x_dim, ushort y_dim): x_dim(x_dim), y_dim(y_dim), rb_tree(nullptr){}
+
+    TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y): TSNE(x_dim, y_dim){
+
+        rb_tree = new RedBlackTree<size_t, T>(x_dim);
+
+        for(size_t i = 0; i < n; i++){
+            T* x_ = new T[x_dim];
+            T* y_ = new T[y_dim];
+            memcpy(x_, x + i * x_dim, x_dim);
+            memcpy(y_, y + i * y_dim, y_dim);
+            rb_tree->insert(1, &i, &x_);
+        }
+
+    };
 
     ~TSNE(){
-        delete vp_tree;
+        delete rb_tree;
         for(auto iter = X.begin(); iter != X.end(); iter++){
             delete (*iter);
         }
@@ -69,7 +81,6 @@ class TSNE{
     void run(size_t n, T *x, T* y, T perplexity, T theta, int rand_seed,
              bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter);
 
-    void reIndex();
 
 };
 
