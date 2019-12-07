@@ -46,8 +46,9 @@ class TSNE{
 
 //    void initX(size_t n, T *x);
     void computeGradient();
+    void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
     void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
-    void computeGaussianPerplexity(size_t n, size_t k, T perplexity, T *x, Matrix &mat);
+    void computeGaussianPerplexity(size_t n_offset, size_t k, T perplexity, Matrix &mat);
 
     public:
 
