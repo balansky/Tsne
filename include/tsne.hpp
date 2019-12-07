@@ -6,6 +6,7 @@
 #define TSNE_TSNE_HPP
 
 #include <tree.hpp>
+#include <ctime>
 
 namespace tsne{
 
@@ -16,6 +17,7 @@ class TSNE{
 
     ushort x_dim;
     ushort y_dim;
+    size_t n_total;
     std::vector<T*> X;
     std::vector<T*> Y;
     RedBlackTree<size_t, T> *rb_tree;
@@ -47,7 +49,6 @@ class TSNE{
     void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
     void computeGaussianPerplexity(size_t n, size_t k, T perplexity, T *x, Matrix &mat);
 
-
     public:
 
     TSNE():x_dim(0), y_dim(0){}
@@ -55,17 +56,7 @@ class TSNE{
     TSNE(ushort x_dim, ushort y_dim): x_dim(x_dim), y_dim(y_dim), rb_tree(nullptr){}
 
     TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y): TSNE(x_dim, y_dim){
-
-        rb_tree = new RedBlackTree<size_t, T>(x_dim);
-
-        for(size_t i = 0; i < n; i++){
-            T* x_ = new T[x_dim];
-            T* y_ = new T[y_dim];
-            memcpy(x_, x + i * x_dim, x_dim);
-            memcpy(y_, y + i * y_dim, y_dim);
-            rb_tree->insert(1, &i, &x_);
-        }
-
+        insertItems(n, x, y);
     };
 
     ~TSNE(){
@@ -78,8 +69,10 @@ class TSNE{
         }
     }
 
-    void run(size_t n, T *x, T* y, T perplexity, T theta, int rand_seed,
-             bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter);
+    void insertItems(size_t n, T *x, T *y);
+
+    void run(size_t n, T *x, T* y, T perplexity, T theta, bool exact,
+             bool partial, int max_iter, int stop_lying_iter, int mom_switch_iter);
 
 
 };

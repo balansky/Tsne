@@ -241,7 +241,7 @@ public:
         delete mean;
     }
 
-    void search(const T *target, int k, std::vector<I> &results, std::vector<T> &distances, bool norm=false){
+    void search(const T *target, int k, bool norm, bool dup,  I *results, T *distances){
 
         std::priority_queue<HeapItem> heap;
 
@@ -249,21 +249,35 @@ public:
         T tau = std::numeric_limits<T>::max();
 
         // Perform the searcg
-        search(_root, target, k, heap, tau);
+        if(dup){
+            search(_root, target, k, heap, tau);
+        }
+        else{
+            search(_root, target, k + 1, heap, tau);
+        }
 
         // Gather final results
-        results.clear(); distances.clear();
+        int i = 0;
         while (!heap.empty()) {
             T dist = heap.top().dist;
-            if(norm) dist /= max_v;
-            results.push_back(heap.top().index);
-            distances.push_back(dist);
+            I idx = heap.top().index;
             heap.pop();
+            if(!dup && dist == 0) continue;
+            if(norm) dist /= max_v;
+            results[i] = idx;
+            distances[i] = dist;
+            i++;
         }
 
         // Results are in reverse order
-        std::reverse(results.begin(), results.end());
-        std::reverse(distances.begin(), distances.end());
+        std::reverse(results, results + i);
+        std::reverse(distances, distances + i);
+    }
+
+    void search(const T *target, int k, std::vector<I> &results, std::vector<T> &distances){
+        results.reserve(k);
+        distances.reserve(k);
+        search(target, k, false, true, results.data(), distances.data());
     }
 
     void insert(size_t n, I *ids, T **inps){
