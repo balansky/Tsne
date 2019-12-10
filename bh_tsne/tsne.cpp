@@ -64,7 +64,7 @@ void TSNE::testGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P
     symmetrizeMatrix(_row_P, _col_P, _val_P, N);
     double sum_P = .0;
     for(int i = 0; i < (*_row_P)[N]; i++) sum_P += (*_val_P)[i];
-//    for(int i = 0; i < (*_row_P)[N]; i++) (*_val_P)[i] /= sum_P;
+    for(int i = 0; i < (*_row_P)[N]; i++) (*_val_P)[i] /= sum_P;
 }
 
 // Perform t-SNE

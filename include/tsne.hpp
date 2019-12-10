@@ -49,7 +49,7 @@ class TSNE{
 
 //    void initX(size_t n, T *x);
     void makeSymmtric(size_t n_offset, std::unordered_map<size_t, T> *lk, size_t **row_P, size_t **col_P, T **val_P);
-    void computeGradient();
+    void computeGradient(size_t run_n, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY);
     void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
     void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
 

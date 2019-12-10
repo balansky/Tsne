@@ -551,15 +551,16 @@ class BarnesHutTree{
             width = new T[dim];
         }
 
-        Cell(size_t n, ushort dims, T *inp):Cell(dims){
+        Cell(size_t n, ushort dims, T **inps):Cell(dims){
             std::vector<T> min_Y(dims, std::numeric_limits<T>::max());
             std::vector<T> max_Y(dims, std::numeric_limits<T>::lowest());
 
             for(size_t i = 0; i < n; i++){
                 for(ushort j = 0; j < dims; j++){
-                    center[j] += inp[j + i*dims];
-                    min_Y[j] = std::min<T>(min_Y[j], inp[j + i*dims]);
-                    max_Y[j] = std::max<T>(max_Y[j], inp[j + i*dims]);
+//                    center[j] += inp[j + i*dims];
+                    center[j] += inps[i][j];
+                    min_Y[j] = std::min<T>(min_Y[j], inps[i][j]);
+                    max_Y[j] = std::max<T>(max_Y[j], inps[i][j]);
                 }
             }
             for (int d = 0; d < dims; d++) {
@@ -718,11 +719,11 @@ class BarnesHutTree{
     explicit BarnesHutTree(ushort dim): dim(dim), _root(nullptr){
         n_splits = 1 << dim;
     }
-    BarnesHutTree(size_t n, ushort dim, T *data):BarnesHutTree(dim){
+    BarnesHutTree(size_t n, ushort dim, T **data):BarnesHutTree(dim){
         _root = new Cell(n, dim, data);
 
         for(size_t i = 0; i < n; i++){
-            insert(data + i*dim, _root);
+            insert(data[i], _root);
         }
     };
     ~BarnesHutTree(){

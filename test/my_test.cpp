@@ -86,12 +86,18 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         std::unique_ptr<float[]> rnd_f = std::unique_ptr<float[]>(new float[nx*dim]);
         simile::float_rand(rnd_f.get(), nx*dim, 1988);
         std::unique_ptr<double[]> rnd_d = std::unique_ptr<double[]>(new double[nx*dim]);
+        std::vector<double*> rnd_dv;
+        rnd_dv.reserve(nx * dim);
 
         for(int i = 0; i < nx*dim; i++){
             rnd_d.get()[i] = static_cast<double>(rnd_f.get()[i]);
         }
+        for(int i = 0; i < nx; i++){
+            double *t = rnd_d.get() + i * dim;
+            rnd_dv.push_back(t);
+        }
 
-        tsne::BarnesHutTree<double> tree(nx, 2, rnd_d.get());
+        tsne::BarnesHutTree<double> tree(nx, dim, rnd_dv.data());
 
         std::unique_ptr<double[]> ng_f = std::unique_ptr<double[]>(new double[dim]);
         double s_q = 0.;
@@ -150,7 +156,7 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
 
         tsne::TSNE<double> ts(nx, x_dim, y_dim,rnd_dx.get(), rnd_dy.get());
         ts.computeGaussianPerplexity(0, 90, 30, &t_row_P, &t_col_P, &t_val_P);
-        for(size_t i = 0; i < nx + 1; i++){
+        for(size_t i = 0; i < nx; i++){
 
             BOOST_CHECK_EQUAL(row_P[i], t_row_P[i]);
             std::vector<NodeHolder> ls;
@@ -170,7 +176,8 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
             std::sort(rs.begin(), rs.end(), [](const NodeHolder &a, const NodeHolder &b)->bool{return a.idx > b.idx;});
             for(size_t k = 0; k < ls.size(); k++){
                 BOOST_CHECK_EQUAL(ls[k].idx, rs[k].idx);
-                BOOST_CHECK_EQUAL(ls[k].val, rs[k].val);
+//                BOOST_CHECK_EQUAL(ls[k].val, rs[k].val);
+                BOOST_CHECK_CLOSE(ls[k].val, rs[k].val, 0.00001);
             }
         }
 

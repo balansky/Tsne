@@ -12,6 +12,8 @@
 
 namespace tsne{
 
+    static double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.0)); }
+
     template<typename T>
     void TSNE<T>::insertItems(size_t n, T *x, T *y){
         if(!rb_tree){
@@ -52,19 +54,65 @@ namespace tsne{
         T* gains =  new T[run_n * y_dim];
         for(size_t i = 0; i < run_n * y_dim; i++)    uY[i] =  .0;
         for(size_t i = 0; i < run_n * y_dim; i++) gains[i] = 1.0;
+        size_t *row_P;
+        size_t *col_P;
+        T *val_P;
         start = clock();
         if(exact){
-//            Matrix mat(run_n, n_total);
+
 
         }
         else{
             size_t k = (int) (3 * perplexity);
-            size_t *row_P;
-            size_t *col_P;
-            T *val_P;
             computeGaussianPerplexity(offset, k, perplexity, &row_P, &col_P, &val_P);
-            for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] /= (T)n_total;
+//            for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] /= (T)n_total;
 
+        }
+        end = clock();
+
+        for(int i = 0; i < row_P[run_n]; i++) val_P[i] *= 12.0;
+
+        for(int iter = 0; iter < max_iter; iter++) {
+
+            computeGradient(run_n, theta, row_P, col_P, val_P, dY);
+
+            // Update gains
+            for(int i = 0; i < run_n * y_dim; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
+            for(int i = 0; i < run_n * y_dim; i++) if(gains[i] < .01) gains[i] = .01;
+
+            // Perform gradient update (with momentum and gains)
+            for(int i = 0; i < run_n * y_dim; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+            for(int i = 0; i < run_n; i++) {
+                for(size_t dd = 0; dd < y_dim; dd++){
+                    Y[i][dd] = Y[i][dd] + uY[i*y_dim + dd];
+
+                }
+            }
+            // Make solution zero-mean
+//            zeroMean(Y, N, no_dims);
+
+            // Stop lying about the P-values after a while, and switch momentum
+            if(iter == stop_lying_iter) {
+                for(int i = 0; i < row_P[run_n]; i++) val_P[i] /= 12.0;
+//                if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
+//                else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
+            }
+            if(iter == mom_switch_iter) momentum = final_momentum;
+
+            // Print out progress
+//            if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
+//                end = clock();
+//                double C = .0;
+//                if(exact) C = evaluateError(P, Y, N, no_dims);
+//                else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta);  // doing approximate computation here!
+//                if(iter == 0)
+//                    printf("Iteration %d: error is %f\n", iter + 1, C);
+//                else {
+//                    total_time += (float) (end - start) / CLOCKS_PER_SEC;
+//                    printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
+//                }
+//                start = clock();
+//            }
         }
 
 
@@ -88,10 +136,15 @@ namespace tsne{
         for(size_t i = 0; i < n; i++){
             for(auto iter = lk[i].begin(); iter != lk[i].end(); iter++){
                 (*col_P)[j] = iter->first;
-                (*val_P)[j] = iter->second / 2.0;
+                (*val_P)[j] = iter->second / (2.0 * (T)n_total);
                 j++;
             }
         }
+
+//        double sum_P = .0;
+//        for(int i = 0; i < (*row_P)[n]; i++) sum_P += (*val_P)[i];
+//        for(int i = 0; i < (*row_P)[n]; i++) (*val_P)[i] /= sum_P;
+//        for(int i = 0; i < (*row_P)[n]; i++) (*val_P)[i] /= (T)n_total;
     }
 
     template<typename T>
@@ -214,7 +267,26 @@ namespace tsne{
     }
 
     template<typename T>
-    void TSNE<T>::computeGradient() {
+    void TSNE<T>::computeGradient(size_t run_n, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY) {
+
+        // Construct space-partitioning tree on current map
+        tsne::BarnesHutTree<T> *tree = new tsne::BarnesHutTree<T>(n_total, y_dim, Y.data());
+//
+//        // Compute all terms required for t-SNE gradient
+        T sum_Q = .0;
+        T* pos_f = (T*) calloc(run_n * y_dim, sizeof(T));
+        T* neg_f = (T*) calloc(run_n * y_dim, sizeof(T));
+//        if(pos_f == NULL || neg_f == NULL) { printf("Memory allocation failed!\n"); exit(1); }
+//        tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f);
+        for(int n = 0; n < run_n; n++) tree->computeNonEdgeForces(Y[n], theta, neg_f + n * y_dim, sum_Q);
+//
+//        // Compute final t-SNE gradient
+//        for(int i = 0; i < N * D; i++) {
+//            dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
+//        }
+//        free(pos_f);
+//        free(neg_f);
+//        delete tree;
 
     }
 
