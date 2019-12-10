@@ -2,8 +2,6 @@
 // Created by andy on 2019-11-25.
 //
 
-#include <cstring>
-#include <unordered_map>
 #include "tsne.hpp"
 
 
@@ -22,10 +20,10 @@ namespace tsne{
         for(size_t i = 0; i < n; i++){
             T* x_ = new T[x_dim];
             T* y_ = new T[y_dim];
-            memcpy(x_, x + i * x_dim, x_dim);
-            memcpy(y_, y + i * y_dim, y_dim);
-            X.push_back(x);
-            Y.push_back(y);
+            memcpy(x_, x + i * x_dim, x_dim*sizeof(T));
+            memcpy(y_, y + i * y_dim, y_dim*sizeof(T));
+            X.push_back(x_);
+            Y.push_back(y_);
             rb_tree->insert(1, &n_total, &x_);
             n_total++;
         }
@@ -56,19 +54,45 @@ namespace tsne{
         for(size_t i = 0; i < run_n * y_dim; i++) gains[i] = 1.0;
         start = clock();
         if(exact){
-            Matrix mat(run_n, n_total);
+//            Matrix mat(run_n, n_total);
 
         }
         else{
             size_t k = (int) (3 * perplexity);
-            Matrix mat(run_n, k);
+            size_t *row_P;
+            size_t *col_P;
+            T *val_P;
+            computeGaussianPerplexity(offset, k, perplexity, &row_P, &col_P, &val_P);
+            for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] /= (T)n_total;
 
         }
 
 
     }
 
+    template<typename T>
+    void TSNE<T>::makeSymmtric(size_t n_offset, std::unordered_map<size_t, T> *lk, size_t **row_P, size_t **col_P, T **val_P) {
+        size_t n = n_total - n_offset;
+        (*row_P) = new size_t[n + 1];
+        (*row_P)[0] = 0;
 
+        size_t nn = 0;
+        for(size_t i = 0; i < n; i++){
+            nn += lk[i].size();
+            (*row_P)[i + 1] = nn;
+        }
+        (*col_P) = new size_t[nn];
+        (*val_P) = new T[nn];
+
+        size_t j = 0;
+        for(size_t i = 0; i < n; i++){
+            for(auto iter = lk[i].begin(); iter != lk[i].end(); iter++){
+                (*col_P)[j] = iter->first;
+                (*val_P)[j] = iter->second / 2.0;
+                j++;
+            }
+        }
+    }
 
     template<typename T>
     void TSNE<T>::computeGaussianPerplexity(size_t n, T perplexity, T *x, tsne::TSNE<T>::Matrix &mat) {
@@ -123,11 +147,12 @@ namespace tsne{
     }
 
     template<typename T>
-    void TSNE<T>::computeGaussianPerplexity(size_t n_offset, size_t k, T perplexity, tsne::TSNE<T>::Matrix &mat) {
+    void TSNE<T>::computeGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P) {
 
         // Allocate the memory we need
         size_t *indices = new size_t[n_total * k];
         T *distances = new T[n_total * k];
+
         std::unordered_map<size_t, T> *lk = new std::unordered_map<size_t, T>[n_total - n_offset];
 
         #pragma omp parallel for default(none) shared(indices, distances)
@@ -137,7 +162,7 @@ namespace tsne{
             size_t *__restrict idxi = indices + i * k;
             T *__restrict dist = distances + i * k;
 
-            rb_tree->search(X[i], k, true, false, idxi, dist);
+            rb_tree->search(X[i], k, false, false, idxi, dist);
             size_t n = 0;
             std::vector<size_t> i_pos;
             std::vector<size_t> j_pos;
@@ -182,22 +207,7 @@ namespace tsne{
             }
         }
 
-        size_t *row_offsets = new size_t[n_total - n_offset];
-        size_t nn = 0;
-        for(int i = 0; i < n_total - n_offset; i++){
-            nn += lk[i].size();
-            row_offsets[i] = lk[i].size();
-        }
-        size_t *col = new size_t[nn];
-        T *val_P = new T[nn];
-        for(int i = 0; i < n_total - n_offset; i++){
-            int j = 0;
-            for(auto iter = lk[i].begin(); iter != lk[i].end(); iter++){
-                col[j] = iter->first;
-                val_P[j] = iter->second;
-                j++;
-            }
-        }
+        makeSymmtric(n_offset, lk, row_P, col_P, val_P);
         delete []indices;
         delete []distances;
         delete []lk;

@@ -8,7 +8,7 @@
 #include <cfloat>
 #include <vptree.h>
 // #include <splittree.h>
-// #include <tsne.h>
+ #include <tsne.h>
 #include <tree.hpp>
 #include <rand.hpp>
 #include <tsne.hpp>
@@ -113,6 +113,15 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
 
     BOOST_AUTO_TEST_CASE(tsne_construct_test){
 
+        struct NodeHolder{
+            size_t idx;
+            double val;
+
+            bool operator!=(const NodeHolder &b) const{
+                return (this->idx != b.idx || this->val != b.val);
+            }
+        };
+
         int nx = 1000;
         int x_dim = 512;
         int y_dim = 2;
@@ -122,7 +131,52 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         std::unique_ptr<float[]> rnd_y = std::unique_ptr<float[]>(new float[nx*y_dim]);
         simile::float_rand(rnd_y.get(), nx*y_dim, 1982);
 
-        tsne::TSNE<float> ts(nx, x_dim, y_dim,rnd_x.get(), rnd_y.get());
+
+        std::unique_ptr<double[]> rnd_dx = std::unique_ptr<double[]>(new double[nx*x_dim]);
+        std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[nx*y_dim]);
+
+        for(int i = 0; i < nx*x_dim; i++){
+            rnd_dx.get()[i] = static_cast<double>(rnd_x.get()[i]);
+        }
+        for(int i = 0; i < nx*y_dim; i++){
+            rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
+        }
+
+        unsigned int* row_P; unsigned int* col_P; double* val_P;
+        TSNE::testGaussianPerplexity(rnd_dx.get(), nx, x_dim, &row_P, &col_P, &val_P, 30, 90);
+
+
+        size_t *t_row_P; size_t *t_col_P; double *t_val_P;
+
+        tsne::TSNE<double> ts(nx, x_dim, y_dim,rnd_dx.get(), rnd_dy.get());
+        ts.computeGaussianPerplexity(0, 90, 30, &t_row_P, &t_col_P, &t_val_P);
+        for(size_t i = 0; i < nx + 1; i++){
+
+            BOOST_CHECK_EQUAL(row_P[i], t_row_P[i]);
+            std::vector<NodeHolder> ls;
+            std::vector<NodeHolder> rs;
+            for(size_t j = row_P[i]; j < row_P[i + 1]; j ++){
+                NodeHolder l;
+                l.idx = col_P[j];
+                l.val = val_P[j];
+                ls.push_back(l);
+
+                NodeHolder r;
+                r.idx = t_col_P[j];
+                r.val = t_val_P[j];
+                rs.push_back(r);
+            }
+            std::sort(ls.begin(), ls.end(), [](const NodeHolder &a, const NodeHolder &b)->bool{return a.idx > b.idx;});
+            std::sort(rs.begin(), rs.end(), [](const NodeHolder &a, const NodeHolder &b)->bool{return a.idx > b.idx;});
+            for(size_t k = 0; k < ls.size(); k++){
+                BOOST_CHECK_EQUAL(ls[k].idx, rs[k].idx);
+                BOOST_CHECK_EQUAL(ls[k].val, rs[k].val);
+            }
+        }
+
+
+
+//        ts.run(0, NULL, NULL, 30, 0.5, false, false, 500, 300, 200);
 
 
     }

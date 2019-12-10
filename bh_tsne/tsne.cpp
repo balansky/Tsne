@@ -57,6 +57,16 @@ static double evaluateError(unsigned int* row_P, unsigned int* col_P, double* va
 static void computeSquaredEuclideanDistance(double* X, int N, int D, double* DD);
 static void symmetrizeMatrix(unsigned int** row_P, unsigned int** col_P, double** val_P, int N);
 
+
+
+void TSNE::testGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K){
+    computeGaussianPerplexity(X, N, D, _row_P, _col_P, _val_P, perplexity, K);
+    symmetrizeMatrix(_row_P, _col_P, _val_P, N);
+    double sum_P = .0;
+    for(int i = 0; i < (*_row_P)[N]; i++) sum_P += (*_val_P)[i];
+//    for(int i = 0; i < (*_row_P)[N]; i++) (*_val_P)[i] /= sum_P;
+}
+
 // Perform t-SNE
 void TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexity, double theta, int rand_seed,
                bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter) {
