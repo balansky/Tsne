@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         size_t *t_row_P; size_t *t_col_P; double *t_val_P;
 
         tsne::TSNE<double> ts(nx, x_dim, y_dim,rnd_dx.get(), rnd_dy.get());
-        ts.computeGaussianPerplexity(0, 90, 30, &t_row_P, &t_col_P, &t_val_P);
+        ts.testGaussianPerplexity(0, 90, 30, &t_row_P, &t_col_P, &t_val_P);
         for(size_t i = 0; i < nx; i++){
 
             BOOST_CHECK_EQUAL(row_P[i], t_row_P[i]);
@@ -181,11 +181,48 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
             }
         }
 
+    }
+
+    BOOST_AUTO_TEST_CASE(tsne_gradient_test){
+
+        int nx = 1000;
+        int x_dim = 512;
+        int y_dim = 2;
+        std::unique_ptr<float[]> rnd_x = std::unique_ptr<float[]>(new float[nx*x_dim]);
+        simile::float_rand(rnd_x.get(), nx*x_dim, 1988);
+
+        std::unique_ptr<float[]> rnd_y = std::unique_ptr<float[]>(new float[nx*y_dim]);
+        simile::float_rand(rnd_y.get(), nx*y_dim, 1982);
 
 
-//        ts.run(0, NULL, NULL, 30, 0.5, false, false, 500, 300, 200);
+        std::unique_ptr<double[]> rnd_dx = std::unique_ptr<double[]>(new double[nx*x_dim]);
+        std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[nx*y_dim]);
+        std::unique_ptr<double[]> rnd_dyt = std::unique_ptr<double[]>(new double[nx*y_dim]);
 
 
+        for(int i = 0; i < nx*x_dim; i++){
+            rnd_dx.get()[i] = static_cast<double>(rnd_x.get()[i]);
+        }
+        for(int i = 0; i < nx*y_dim; i++){
+            rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
+            rnd_dyt.get()[i] = static_cast<double>(rnd_y.get()[i]);
+        }
+//        double *dY = new double[nx * y_dim];
+//        TSNE::testGradient(rnd_dx.get(), rnd_dy.get(), nx, x_dim, y_dim, 30, 0.5, dY);
+//
+//
+//        double *dYt = new double[nx * y_dim];
+        tsne::TSNE<double> ts(nx, x_dim, y_dim, rnd_dx.get(), rnd_dy.get());
+//        ts.testGradient(0, 30, 0.5, dYt);
+//        for(size_t i = 0; i < nx; i++){
+//            BOOST_CHECK_CLOSE(dY[i], dYt[i], 0.0001);
+//        }
+        TSNE::run(rnd_dx.get(), nx, x_dim, rnd_dy.get(), y_dim, 30, 0.5, 1988, true, 2, 200, 200);
+        ts.run(0, NULL, rnd_dyt.get(), 30, 0.5, false, false, 2, 200, 200);
+        for(size_t i = 0; i < nx; i++){
+            BOOST_CHECK_CLOSE(rnd_dy[i], rnd_dyt[i], 0.1);
+
+        }
     }
 
 //    BOOST_AUTO_TEST_CASE(gaussian_perplexity_test){

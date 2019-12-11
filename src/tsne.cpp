@@ -15,6 +15,16 @@ namespace tsne{
     static double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.0)); }
 
     template<typename T>
+    static void mean(size_t begin_n, size_t end_n, ushort dim, std::vector<T*> &v, T *m){
+        for(size_t i = begin_n; i < end_n; i++){
+            for(ushort d = 0; d < dim; d++){
+                m[d]+= v[i][d];
+            }
+        }
+        for(ushort d = 0; d < dim; d++) m[d] /= (T)(end_n - begin_n);
+    }
+
+    template<typename T>
     void TSNE<T>::insertItems(size_t n, T *x, T *y){
         if(!rb_tree){
             rb_tree = new RedBlackTree<size_t, T>(x_dim);
@@ -37,7 +47,10 @@ namespace tsne{
                       int stop_lying_iter, int mom_switch_iter) {
         size_t offset = 0;
         size_t run_n = n_total + n;
+        T* offset_mean = (T*)calloc(y_dim, sizeof(T));
+        T* y_mean = (T*) calloc(y_dim, sizeof(T));
         if(partial) {
+            mean(0, n_total, y_dim, Y, offset_mean);
             offset = n_total;
             run_n = n;
         }
@@ -54,9 +67,9 @@ namespace tsne{
         T* gains =  new T[run_n * y_dim];
         for(size_t i = 0; i < run_n * y_dim; i++)    uY[i] =  .0;
         for(size_t i = 0; i < run_n * y_dim; i++) gains[i] = 1.0;
-        size_t *row_P;
-        size_t *col_P;
-        T *val_P;
+        size_t *row_P = nullptr;
+        size_t *col_P = nullptr;
+        T *val_P = nullptr;
         start = clock();
         if(exact){
 
@@ -65,35 +78,39 @@ namespace tsne{
         else{
             size_t k = (int) (3 * perplexity);
             computeGaussianPerplexity(offset, k, perplexity, &row_P, &col_P, &val_P);
-//            for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] /= (T)n_total;
 
         }
         end = clock();
 
-        for(int i = 0; i < row_P[run_n]; i++) val_P[i] *= 12.0;
+        for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] *= 12.0;
 
         for(int iter = 0; iter < max_iter; iter++) {
 
-            computeGradient(run_n, theta, row_P, col_P, val_P, dY);
+            computeGradient(run_n, offset, theta, row_P, col_P, val_P, dY);
 
             // Update gains
-            for(int i = 0; i < run_n * y_dim; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
-            for(int i = 0; i < run_n * y_dim; i++) if(gains[i] < .01) gains[i] = .01;
+            for(size_t i = 0; i < run_n * y_dim; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
+            for(size_t i = 0; i < run_n * y_dim; i++) if(gains[i] < .01) gains[i] = .01;
 
             // Perform gradient update (with momentum and gains)
-            for(int i = 0; i < run_n * y_dim; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
-            for(int i = 0; i < run_n; i++) {
+            for(size_t i = 0; i < run_n * y_dim; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+            for(size_t i = 0; i < run_n; i++) {
                 for(size_t dd = 0; dd < y_dim; dd++){
-                    Y[i][dd] = Y[i][dd] + uY[i*y_dim + dd];
-
+                    Y[i + offset][dd] = Y[i + offset][dd] + uY[i*y_dim + dd];
                 }
             }
             // Make solution zero-mean
-//            zeroMean(Y, N, no_dims);
+            mean(offset, n_total, y_dim, Y, y_mean);
+            for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
+            for(size_t i = 0; i < run_n; i++){
+                for(size_t dd = 0; dd < y_dim; dd++){
+                    Y[i + offset][dd] -= y_mean[dd];
+                }
+            }
 
             // Stop lying about the P-values after a while, and switch momentum
             if(iter == stop_lying_iter) {
-                for(int i = 0; i < row_P[run_n]; i++) val_P[i] /= 12.0;
+                for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] /= 12.0;
 //                if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
 //                else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
             }
@@ -114,7 +131,18 @@ namespace tsne{
 //                start = clock();
 //            }
         }
+        for(size_t i = 0; i < run_n; i++){
+            memcpy(y + i *y_dim, Y[i + offset], y_dim*sizeof(T));
+        }
 
+        delete []dY;
+        delete []uY;
+        delete []gains;
+        delete []row_P;
+        delete []col_P;
+        delete []val_P;
+        delete []offset_mean;
+        delete []y_mean;
 
     }
 
@@ -147,10 +175,6 @@ namespace tsne{
 //        for(int i = 0; i < (*row_P)[n]; i++) (*val_P)[i] /= (T)n_total;
     }
 
-    template<typename T>
-    void TSNE<T>::computeGaussianPerplexity(size_t n, T perplexity, T *x, tsne::TSNE<T>::Matrix &mat) {
-
-    }
     template<typename T>
     void TSNE<T>::searchGaussianPerplexity(size_t k, T perplexity, T *__restrict dist, T *cur_P){
         bool found = false;
@@ -267,47 +291,73 @@ namespace tsne{
     }
 
     template<typename T>
-    void TSNE<T>::computeGradient(size_t run_n, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY) {
+    void TSNE<T>::testGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P,
+                                         T **val_P) {
+        computeGaussianPerplexity(n_offset, k, perplexity, row_P, col_P, val_P);
+    }
+
+    template<typename T>
+    void TSNE<T>::computeGradient(size_t run_n,  size_t offset, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY) {
 
         // Construct space-partitioning tree on current map
         tsne::BarnesHutTree<T> *tree = new tsne::BarnesHutTree<T>(n_total, y_dim, Y.data());
 //
 //        // Compute all terms required for t-SNE gradient
-        T sum_Q = .0;
+        T *sum_q = (T*) calloc(run_n, sizeof(T));
         T* pos_f = (T*) calloc(run_n * y_dim, sizeof(T));
         T* neg_f = (T*) calloc(run_n * y_dim, sizeof(T));
+        T* buffs = new T[run_n * y_dim];
+
 //        if(pos_f == NULL || neg_f == NULL) { printf("Memory allocation failed!\n"); exit(1); }
-//        tree->computeEdgeForces(inp_row_P, inp_col_P, inp_val_P, N, pos_f);
-        for(int n = 0; n < run_n; n++) tree->computeNonEdgeForces(Y[n], theta, neg_f + n * y_dim, sum_Q);
-//
-//        // Compute final t-SNE gradient
-//        for(int i = 0; i < N * D; i++) {
-//            dC[i] = pos_f[i] - (neg_f[i] / sum_Q);
-//        }
-//        free(pos_f);
-//        free(neg_f);
-//        delete tree;
+
+        // Loop over all edges in the graph
+        #pragma omp parallel for default(none) shared(row_P, col_P, val_P, sum_q, pos_f, neg_f, buffs, sum_q, Y)
+        for(size_t n = 0; n < run_n; n++) {
+            T *sum = sum_q + n;
+            T *neg = neg_f + n*y_dim;
+            T *pos = pos_f + n*y_dim;
+            for(size_t i = row_P[n]; i < row_P[n + 1]; i++) {
+
+                // Compute pairwise distance and Q-value
+                T * buff = buffs + n*y_dim;
+                T D = 1.0;
+                for(size_t d = 0; d < y_dim; d++) buff[d] = Y[n + offset][d] - Y[col_P[i]][d];
+                for(size_t d = 0; d < y_dim; d++) D += buff[d] * buff[d];
+                D = val_P[i] / D;
+
+                // Sum positive force
+                for(size_t d = 0; d < y_dim; d++) pos[d] += D * buff[d];
+            }
+            tree->computeNonEdgeForces(Y[n + offset], theta, neg, (*sum));
+        }
+        T sum_Q = 0.0;
+        for(size_t n = 0; n < run_n; n++) sum_Q += sum_q[n];
+
+        // Compute final t-SNE gradient
+        for(size_t i = 0; i < run_n * y_dim; i++) {
+            dY[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        }
+
+        free(sum_q);
+        free(pos_f);
+        free(neg_f);
+        delete []buffs;
+        delete tree;
 
     }
 
-    template <typename T>
-    T* TSNE<T>::Matrix::get(size_t row_i, size_t col_j) {
 
+    template<typename T>
+    void TSNE<T>::testGradient(size_t offset, T perplexity, T theta, T *dY) {
+
+        size_t *row_P; size_t *col_P; T *val_P;
+        computeGaussianPerplexity(offset, int(3*perplexity), perplexity, &row_P, &col_P, &val_P);
+
+        computeGradient(n_total, offset, theta, row_P, col_P, val_P, dY);
+        delete row_P;
+        delete col_P;
+        delete val_P;
     }
-
-
-    template <typename T>
-    void TSNE<T>::Matrix::set(size_t row_i, size_t col_j, size_t idx, T v) {
-        vals[row_i * n_cols + col_j] = v;
-        indices[row_i * n_cols + col_j] = idx;
-    }
-
-    template <typename T>
-    void TSNE<T>::Matrix::makeSymmtric() {
-
-    }
-
-
     template class TSNE<float>;
     template class TSNE<double>;
 

@@ -44,6 +44,7 @@ namespace TSNE {
              bool skip_random_init, int max_iter, int stop_lying_iter, int mom_switch_iter);
 
     void testGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P, unsigned int** _col_P, double** _val_P, double perplexity, int K);
+    void testGradient(double *X, double *Y, int N, int D, int no_dims, double perplexity, double theta, double *dY);
 
     bool load_data(double** data, int* n, int* d, int* no_dims, double* theta, double* perplexity, int* rand_seed, int* max_iter);
     bool load_data_with_init(double** data, int* n, int* d, int* no_dims, double** init_y, int* n_y, double* theta, double* perplexity, int* rand_seed, int* max_iter);

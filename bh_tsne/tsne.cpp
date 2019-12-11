@@ -65,6 +65,19 @@ void TSNE::testGaussianPerplexity(double* X, int N, int D, unsigned int** _row_P
     double sum_P = .0;
     for(int i = 0; i < (*_row_P)[N]; i++) sum_P += (*_val_P)[i];
     for(int i = 0; i < (*_row_P)[N]; i++) (*_val_P)[i] /= sum_P;
+//    computeGradient(_row_P, _col_P, _val_P, Y, N, no_dims, dY, theta);
+//    computeGradient()
+}
+
+void TSNE::testGradient(double *X, double *Y, int N, int D, int no_dims, double perplexity, double theta, double *dY){
+
+    unsigned int* row_P; unsigned int* col_P; double* val_P;
+    testGaussianPerplexity(X, N, D, &row_P, &col_P, &val_P, perplexity, int(3 * perplexity));
+    computeGradient(row_P, col_P, val_P, Y, N, no_dims, dY, theta);
+
+    free(row_P); row_P = NULL;
+    free(col_P); col_P = NULL;
+    free(val_P); val_P = NULL;
 }
 
 // Perform t-SNE
@@ -190,20 +203,20 @@ void TSNE::run(double* X, int N, int D, double* Y, int no_dims, double perplexit
         }
         if(iter == mom_switch_iter) momentum = final_momentum;
 
-        // Print out progress
-        if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
-            end = clock();
-            double C = .0;
-            if(exact) C = evaluateError(P, Y, N, no_dims);
-            else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta);  // doing approximate computation here!
-            if(iter == 0)
-                printf("Iteration %d: error is %f\n", iter + 1, C);
-            else {
-                total_time += (float) (end - start) / CLOCKS_PER_SEC;
-                printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
-            }
-			start = clock();
-        }
+//        // Print out progress
+//        if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
+//            end = clock();
+//            double C = .0;
+//            if(exact) C = evaluateError(P, Y, N, no_dims);
+//            else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta);  // doing approximate computation here!
+//            if(iter == 0)
+//                printf("Iteration %d: error is %f\n", iter + 1, C);
+//            else {
+//                total_time += (float) (end - start) / CLOCKS_PER_SEC;
+//                printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
+//            }
+//			start = clock();
+//        }
     }
     end = clock(); total_time += (float) (end - start) / CLOCKS_PER_SEC;
 

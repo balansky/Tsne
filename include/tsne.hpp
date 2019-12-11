@@ -25,33 +25,12 @@ class TSNE{
     std::vector<T*> Y;
     RedBlackTree<size_t, T> *rb_tree;
 
-    struct Matrix{
-        size_t n_rows;
-        size_t n_cols;
-        T *vals;
-        size_t *indices;
-        bool is_symmtric;
-
-        Matrix():n_rows(0),n_cols(0), is_symmtric(false), vals(nullptr), indices(nullptr){}
-        Matrix(size_t n_rows, size_t n_cols): n_rows(n_rows), n_cols(n_cols),is_symmtric(false){
-           vals = new T[n_rows * n_cols];
-           indices = new size_t[n_rows * n_cols];
-        }
-        ~Matrix(){
-            delete vals;
-            delete indices;
-        }
-
-        T* get(size_t row_i, size_t col_j);
-        void set(size_t row_i, size_t col_j, size_t idx, T v);
-        void makeSymmtric();
-    };
-
 //    void initX(size_t n, T *x);
     void makeSymmtric(size_t n_offset, std::unordered_map<size_t, T> *lk, size_t **row_P, size_t **col_P, T **val_P);
-    void computeGradient(size_t run_n, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY);
+    void computeGradient(size_t run_n, size_t offset, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY);
     void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
-    void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
+    void computeGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P);
+//    void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
 
     public:
 
@@ -76,7 +55,9 @@ class TSNE{
 
     void insertItems(size_t n, T *x, T *y);
 
-    void computeGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P);
+    void testGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P);
+
+    void testGradient(size_t offset, T perplexity, T theta, T *dY);
 
     void run(size_t n, T *x, T* y, T perplexity, T theta, bool exact,
              bool partial, int max_iter, int stop_lying_iter, int mom_switch_iter);
