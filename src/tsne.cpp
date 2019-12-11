@@ -16,6 +16,7 @@ namespace tsne{
 
     template<typename T>
     static void mean(size_t begin_n, size_t end_n, ushort dim, std::vector<T*> &v, T *m){
+        for(ushort d = 0; d < dim; d++) m[d] = 0;
         for(size_t i = begin_n; i < end_n; i++){
             for(ushort d = 0; d < dim; d++){
                 m[d]+= v[i][d];
@@ -46,13 +47,13 @@ namespace tsne{
     void TSNE<T>::run(size_t n, T *x, T *y, T perplexity, T theta, bool exact, bool partial, int max_iter,
                       int stop_lying_iter, int mom_switch_iter) {
         size_t offset = 0;
-        size_t run_n = n_total + n;
-        T* offset_mean = (T*)calloc(y_dim, sizeof(T));
-        T* y_mean = (T*) calloc(y_dim, sizeof(T));
+        size_t n_var = n_total + n;
+        std::unique_ptr<T[]> offset_mean(new T[y_dim]{.0});
+        std::unique_ptr<T[]> y_mean(new T[y_dim]{.0});
         if(partial) {
-            mean(0, n_total, y_dim, Y, offset_mean);
+            mean(0, n_total, y_dim, Y, offset_mean.get());
             offset = n_total;
-            run_n = n;
+            n_var = n;
         }
         insertItems(n, x, y);
 
@@ -62,11 +63,12 @@ namespace tsne{
         T momentum = .5, final_momentum = .8;
         T eta = 200.0;
 
-        T* dY    = new T[run_n * y_dim];
-        T* uY    = new T[run_n * y_dim];
-        T* gains =  new T[run_n * y_dim];
-        for(size_t i = 0; i < run_n * y_dim; i++)    uY[i] =  .0;
-        for(size_t i = 0; i < run_n * y_dim; i++) gains[i] = 1.0;
+        std::unique_ptr<T[]> dY(new T[n_var * y_dim]);
+        std::unique_ptr<T[]> uY(new T[n_var * y_dim]{.0});
+        std::unique_ptr<T[]> gains(new T[n_var * y_dim]);
+//        std::fill(uY.get(), uY.get() + (n_var * y_dim), .0);
+        std::fill(gains.get(), gains.get() + (n_var * y_dim), 1.0);
+
         size_t *row_P = nullptr;
         size_t *col_P = nullptr;
         T *val_P = nullptr;
@@ -82,27 +84,27 @@ namespace tsne{
         }
         end = clock();
 
-        for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] *= 12.0;
+        for(size_t i = 0; i < row_P[n_var]; i++) val_P[i] *= 12.0;
 
         for(int iter = 0; iter < max_iter; iter++) {
 
-            computeGradient(run_n, offset, theta, row_P, col_P, val_P, dY);
+            computeGradient(n_var, offset, theta, row_P, col_P, val_P, dY.get());
 
             // Update gains
-            for(size_t i = 0; i < run_n * y_dim; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
-            for(size_t i = 0; i < run_n * y_dim; i++) if(gains[i] < .01) gains[i] = .01;
+            for(size_t i = 0; i < n_var * y_dim; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
+            for(size_t i = 0; i < n_var * y_dim; i++) if(gains[i] < .01) gains[i] = .01;
 
             // Perform gradient update (with momentum and gains)
-            for(size_t i = 0; i < run_n * y_dim; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
-            for(size_t i = 0; i < run_n; i++) {
+            for(size_t i = 0; i < n_var * y_dim; i++) uY[i] = momentum * uY[i] - eta * gains[i] * dY[i];
+            for(size_t i = 0; i < n_var; i++) {
                 for(size_t dd = 0; dd < y_dim; dd++){
                     Y[i + offset][dd] = Y[i + offset][dd] + uY[i*y_dim + dd];
                 }
             }
             // Make solution zero-mean
-            mean(offset, n_total, y_dim, Y, y_mean);
+            mean(offset, n_total, y_dim, Y, y_mean.get());
             for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
-            for(size_t i = 0; i < run_n; i++){
+            for(size_t i = 0; i < n_var; i++){
                 for(size_t dd = 0; dd < y_dim; dd++){
                     Y[i + offset][dd] -= y_mean[dd];
                 }
@@ -110,7 +112,7 @@ namespace tsne{
 
             // Stop lying about the P-values after a while, and switch momentum
             if(iter == stop_lying_iter) {
-                for(size_t i = 0; i < row_P[run_n]; i++) val_P[i] /= 12.0;
+                for(size_t i = 0; i < row_P[n_var]; i++) val_P[i] /= 12.0;
 //                if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
 //                else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
             }
@@ -131,18 +133,13 @@ namespace tsne{
 //                start = clock();
 //            }
         }
-        for(size_t i = 0; i < run_n; i++){
+        for(size_t i = 0; i < n_var; i++){
             memcpy(y + i *y_dim, Y[i + offset], y_dim*sizeof(T));
         }
 
-        delete []dY;
-        delete []uY;
-        delete []gains;
         delete []row_P;
         delete []col_P;
         delete []val_P;
-        delete []offset_mean;
-        delete []y_mean;
 
     }
 
@@ -165,11 +162,12 @@ namespace tsne{
             for(auto iter = lk[i].begin(); iter != lk[i].end(); iter++){
                 (*col_P)[j] = iter->first;
                 (*val_P)[j] = iter->second / (2.0 * (T)n_total);
+//                (*val_P)[j] = iter->second / 2.0 ;
                 j++;
             }
         }
 
-//        double sum_P = .0;
+//        T sum_P = .0;
 //        for(int i = 0; i < (*row_P)[n]; i++) sum_P += (*val_P)[i];
 //        for(int i = 0; i < (*row_P)[n]; i++) (*val_P)[i] /= sum_P;
 //        for(int i = 0; i < (*row_P)[n]; i++) (*val_P)[i] /= (T)n_total;
@@ -236,8 +234,8 @@ namespace tsne{
         for(size_t i = 0; i < n_total; i++) {
 
 //             Find nearest neighbors
-            size_t *__restrict idxi = indices + i * k;
-            T *__restrict dist = distances + i * k;
+            size_t *idxi = indices + i * k;
+            T *dist = distances + i * k;
 
             rb_tree->search(X[i], k, false, false, idxi, dist);
             size_t n = 0;

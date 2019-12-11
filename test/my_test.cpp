@@ -176,8 +176,8 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
             std::sort(rs.begin(), rs.end(), [](const NodeHolder &a, const NodeHolder &b)->bool{return a.idx > b.idx;});
             for(size_t k = 0; k < ls.size(); k++){
                 BOOST_CHECK_EQUAL(ls[k].idx, rs[k].idx);
-//                BOOST_CHECK_EQUAL(ls[k].val, rs[k].val);
-                BOOST_CHECK_CLOSE(ls[k].val, rs[k].val, 0.00001);
+                BOOST_CHECK_EQUAL(ls[k].val, rs[k].val);
+//                BOOST_CHECK_CLOSE(ls[k].val, rs[k].val, 0.00001);
             }
         }
 
@@ -207,18 +207,20 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
             rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
             rnd_dyt.get()[i] = static_cast<double>(rnd_y.get()[i]);
         }
-//        double *dY = new double[nx * y_dim];
-//        TSNE::testGradient(rnd_dx.get(), rnd_dy.get(), nx, x_dim, y_dim, 30, 0.5, dY);
-//
-//
+        double *dY = new double[nx * y_dim];
+        TSNE::testGradient(rnd_dx.get(), rnd_dy.get(), nx, x_dim, y_dim, 30, 0.5, dY);
+
+
+        tsne::TSNE<double> ts(nx, x_dim, y_dim, rnd_dx.get(), rnd_dyt.get());
 //        double *dYt = new double[nx * y_dim];
-        tsne::TSNE<double> ts(nx, x_dim, y_dim, rnd_dx.get(), rnd_dy.get());
 //        ts.testGradient(0, 30, 0.5, dYt);
 //        for(size_t i = 0; i < nx; i++){
-//            BOOST_CHECK_CLOSE(dY[i], dYt[i], 0.0001);
+////            BOOST_CHECK_CLOSE(dY[i], dYt[i], 0.00001);
+//            BOOST_CHECK_EQUAL(dY[i], dYt[i]);
 //        }
-        TSNE::run(rnd_dx.get(), nx, x_dim, rnd_dy.get(), y_dim, 30, 0.5, 1988, true, 2, 200, 200);
-        ts.run(0, NULL, rnd_dyt.get(), 30, 0.5, false, false, 2, 200, 200);
+
+        TSNE::run(rnd_dx.get(), nx, x_dim, rnd_dy.get(), y_dim, 30, 0.5, 1988, true, 10, 200, 200);
+        ts.run(0, NULL, rnd_dyt.get(), 30, 0.5, false, false, 10, 200, 200);
         for(size_t i = 0; i < nx; i++){
             BOOST_CHECK_CLOSE(rnd_dy[i], rnd_dyt[i], 0.1);
 

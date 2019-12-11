@@ -5,10 +5,11 @@
 #ifndef TSNE_TSNE_HPP
 #define TSNE_TSNE_HPP
 
+#include <ctime>
 #include <cmath>
 #include <cstring>
+#include <memory>
 #include <unordered_map>
-#include <ctime>
 #include <tree.hpp>
 
 namespace tsne{
@@ -46,10 +47,10 @@ class TSNE{
     ~TSNE(){
         delete rb_tree;
         for(auto iter = X.begin(); iter != X.end(); iter++){
-            delete (*iter);
+            delete [](*iter);
         }
         for(auto iter = Y.begin(); iter != Y.end(); iter++){
-            delete (*iter);
+            delete [](*iter);
         }
     }
 

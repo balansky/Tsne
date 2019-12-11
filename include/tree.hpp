@@ -730,10 +730,6 @@ class BarnesHutTree{
         delete _root;
     }
 
-    bool insert(T *d){
-        insert(d, _root);
-    }
-
     void computeNonEdgeForces(const T *point, const T theta,  T *neg_f, T &sum_Q) const{
         computeNonEdgeForces(point, _root, theta, neg_f, sum_Q);
     }
