@@ -12,10 +12,18 @@
 
 namespace tsne{
 
-    static double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.0)); }
+    static inline double sign(double x) { return (x == .0 ? .0 : (x < .0 ? -1.0 : 1.0)); }
+
+    static inline void recordVarPoints(size_t k, size_t th, size_t *idxi, std::vector<std::pair<size_t, size_t>> &ret){
+        for(size_t i = 0; i < k; i++){
+            if(idxi[i] >= th){
+                ret.emplace_back(idxi[i], i);
+            }
+        }
+    }
 
     template<typename T>
-    static void mean(size_t begin_n, size_t end_n, ushort dim, std::vector<T*> &v, T *m){
+    static void computeMean(size_t begin_n, size_t end_n, ushort dim, std::vector<T*> &v, T *m){
         for(ushort d = 0; d < dim; d++) m[d] = 0;
         for(size_t i = begin_n; i < end_n; i++){
             for(ushort d = 0; d < dim; d++){
@@ -48,47 +56,39 @@ namespace tsne{
                       int stop_lying_iter, int mom_switch_iter) {
         size_t offset = 0;
         size_t n_var = n_total + n;
-        std::unique_ptr<T[]> offset_mean(new T[y_dim]{.0});
-        std::unique_ptr<T[]> y_mean(new T[y_dim]{.0});
+        std::unique_ptr<T[]> offset_mean(new T[y_dim]());
+        std::unique_ptr<T[]> y_mean(new T[y_dim]());
         if(partial) {
-            mean(0, n_total, y_dim, Y, offset_mean.get());
+            computeMean(0, n_total, y_dim, Y, offset_mean.get());
             offset = n_total;
             n_var = n;
         }
         insertItems(n, x, y);
 
         // Set learning parameters
-        float total_time = .0;
-        clock_t start, end;
         T momentum = .5, final_momentum = .8;
         T eta = 200.0;
 
         std::unique_ptr<T[]> dY(new T[n_var * y_dim]);
-        std::unique_ptr<T[]> uY(new T[n_var * y_dim]{.0});
+        std::unique_ptr<T[]> uY(new T[n_var * y_dim]());
         std::unique_ptr<T[]> gains(new T[n_var * y_dim]);
-//        std::fill(uY.get(), uY.get() + (n_var * y_dim), .0);
         std::fill(gains.get(), gains.get() + (n_var * y_dim), 1.0);
 
-        size_t *row_P = nullptr;
-        size_t *col_P = nullptr;
-        T *val_P = nullptr;
-        start = clock();
+        std::unique_ptr<Matrix> mat;
         if(exact){
-
-
+            mat = std::unique_ptr<StaticMatrix>(new StaticMatrix(n_var, n_total));
         }
         else{
             size_t k = (int) (3 * perplexity);
-            computeGaussianPerplexity(offset, k, perplexity, &row_P, &col_P, &val_P);
-
+            DynamicMatrix dymat(n_var);
+            computeGaussianPerplexity(offset, k, perplexity, &dymat);
+            mat = std::unique_ptr<SparseMatrix>(new SparseMatrix(std::move(dymat)));
         }
-        end = clock();
-
-        for(size_t i = 0; i < row_P[n_var]; i++) val_P[i] *= 12.0;
+        (*mat) *= 12.0;
 
         for(int iter = 0; iter < max_iter; iter++) {
 
-            computeGradient(n_var, offset, theta, row_P, col_P, val_P, dY.get());
+            computeGradient(offset, theta, mat.get(), dY.get());
 
             // Update gains
             for(size_t i = 0; i < n_var * y_dim; i++) gains[i] = (sign(dY[i]) != sign(uY[i])) ? (gains[i] + .2) : (gains[i] * .8);
@@ -102,8 +102,8 @@ namespace tsne{
                 }
             }
             // Make solution zero-mean
-            mean(offset, n_total, y_dim, Y, y_mean.get());
-            for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
+            computeMean(offset, n_total, y_dim, Y, y_mean.get());
+//            for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
             for(size_t i = 0; i < n_var; i++){
                 for(size_t dd = 0; dd < y_dim; dd++){
                     Y[i + offset][dd] -= y_mean[dd];
@@ -112,35 +112,24 @@ namespace tsne{
 
             // Stop lying about the P-values after a while, and switch momentum
             if(iter == stop_lying_iter) {
-                for(size_t i = 0; i < row_P[n_var]; i++) val_P[i] /= 12.0;
-//                if(exact) { for(int i = 0; i < N * N; i++)        P[i] /= 12.0; }
-//                else      { for(int i = 0; i < row_P[N]; i++) val_P[i] /= 12.0; }
+                (*mat) /= 12.0;
             }
             if(iter == mom_switch_iter) momentum = final_momentum;
 
-            // Print out progress
-//            if (iter > 0 && (iter % 50 == 0 || iter == max_iter - 1)) {
-//                end = clock();
-//                double C = .0;
-//                if(exact) C = evaluateError(P, Y, N, no_dims);
-//                else      C = evaluateError(row_P, col_P, val_P, Y, N, no_dims, theta);  // doing approximate computation here!
-//                if(iter == 0)
-//                    printf("Iteration %d: error is %f\n", iter + 1, C);
-//                else {
-//                    total_time += (float) (end - start) / CLOCKS_PER_SEC;
-//                    printf("Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter, C, (float) (end - start) / CLOCKS_PER_SEC);
-//                }
-//                start = clock();
-//            }
         }
         for(size_t i = 0; i < n_var; i++){
             memcpy(y + i *y_dim, Y[i + offset], y_dim*sizeof(T));
         }
 
-        delete []row_P;
-        delete []col_P;
-        delete []val_P;
+    }
 
+    template<typename T>
+    void TSNE<T>::makeSymmtric(tsne::TSNE<T>::DynamicMatrix *mat) {
+        for(size_t i = 0; i < mat->n_row; i++){
+            for(auto iter = mat->rows[i].begin(); iter != mat->rows[i].end(); iter++){
+                iter->second /=(2.0 * (T)n_total);
+            }
+        }
     }
 
     template<typename T>
@@ -183,13 +172,13 @@ namespace tsne{
         T sum_P;
         int iter = 0;
         while(!found && iter < 200){
-            for(int m = 0; m < k; m++) cur_P[m] = exp(-beta * dist[m] * dist[m]);
+            for(size_t m = 0; m < k; m++) cur_P[m] = exp(-beta * dist[m] * dist[m]);
 
             // Compute entropy of current row
             sum_P = std::numeric_limits<T>::min();
-            for(int m = 0; m < k; m++) sum_P += cur_P[m];
+            for(size_t m = 0; m < k; m++) sum_P += cur_P[m];
             double H = .0;
-            for(int m = 0; m < k; m++) H += beta * (dist[m] * dist[m] * cur_P[m]);
+            for(size_t m = 0; m < k; m++) H += beta * (dist[m] * dist[m] * cur_P[m]);
             H = (H / sum_P) + log(sum_P);
 
             // Evaluate whether the entropy is within the tolerance level
@@ -219,6 +208,43 @@ namespace tsne{
         }
         for(size_t m = 0; m < k; m++) cur_P[m] /= sum_P;
 
+    }
+
+    template<typename T>
+    void TSNE<T>::computeGaussianPerplexity(size_t offset, size_t k, T perplexity,
+                                            tsne::TSNE<T>::DynamicMatrix *mat) {
+
+        std::unique_ptr<size_t[]> indices = std::unique_ptr<size_t[]>(new size_t[n_total * k]);
+        std::unique_ptr<T[]> distances = std::unique_ptr<T[]>(new T[n_total * k]);
+
+#pragma omp parallel for default(none) shared(indices, distances)
+        for(size_t i = 0; i < n_total; i++) {
+
+//          Find nearest neighbors
+            size_t *idxi = indices.get() + i * k;
+            T *dist = distances.get() + i * k;
+
+            rb_tree->search(X[i], k, true, false, idxi, dist);
+
+            std::vector<std::pair<size_t, size_t>> var_points;
+            recordVarPoints(k, offset, idxi, var_points);
+
+            if(!var_points.empty() || i >= offset){
+                std::unique_ptr<T[]> cur_P = std::unique_ptr<T[]>(new T[k]);
+                searchGaussianPerplexity(k, perplexity, dist, cur_P.get());
+
+#pragma omp critical
+                {
+                    if(i >= offset){
+                        for(size_t m = 0; m < k; m++) mat->add(i - offset, idxi[m], cur_P[m]);
+                    }
+                    for(auto &var_point : var_points) {
+                        mat->add(var_point.first - offset, i, cur_P[var_point.second]);
+                    }
+                }
+            }
+        }
+        makeSymmtric(mat);
     }
 
     template<typename T>
@@ -292,6 +318,48 @@ namespace tsne{
     void TSNE<T>::testGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P,
                                          T **val_P) {
         computeGaussianPerplexity(n_offset, k, perplexity, row_P, col_P, val_P);
+    }
+
+    template<typename T>
+    void TSNE<T>::computeGradient(size_t offset, T theta, tsne::TSNE<T>::Matrix *mat, T *dY) {
+
+        // Construct space-partitioning tree on current map
+        std::unique_ptr<tsne::BarnesHutTree<T>> tree =
+                std::unique_ptr<tsne::BarnesHutTree<T>>(new tsne::BarnesHutTree<T>(n_total, y_dim, Y.data()));
+
+        // Compute all terms required for t-SNE gradient
+        std::unique_ptr<T[]> sum_q = std::unique_ptr<T[]>(new T[mat->n_row]());
+        std::unique_ptr<T[]> pos_f = std::unique_ptr<T[]>(new T[mat->n_row * y_dim]());
+        std::unique_ptr<T[]> neg_f = std::unique_ptr<T[]>(new T[mat->n_row * y_dim]());
+        std::unique_ptr<T[]> buffs = std::unique_ptr<T[]>(new T[mat->n_row * y_dim]());
+
+        // Loop over all edges in the graph
+#pragma omp parallel for default(none) shared(sum_q, pos_f, neg_f, buffs, sum_q, mat, Y)
+        for(size_t row_i = 0; row_i < mat->n_row; row_i++) {
+            T *sum = sum_q.get() + row_i;
+            T *neg = neg_f.get() + row_i*y_dim;
+            T *pos = pos_f.get() + row_i*y_dim;
+            T * buff = buffs.get() + row_i*y_dim;
+            size_t row_size = mat->getRowSize(row_i);
+            for(size_t col_i = 0; col_i < row_size; col_i++){
+                size_t idx = mat->getIndex(row_i, col_i);
+                T D = 1.0;
+                for(size_t d = 0; d < y_dim; d++) buff[d] = Y[row_i + offset][d] - Y[idx][d];
+                for(size_t d = 0; d < y_dim; d++) D += buff[d] * buff[d];
+                D = mat->getValue(row_i, col_i) / D;
+
+                for(size_t d = 0; d < y_dim; d++) pos[d] += D * buff[d];
+            }
+            tree->computeNonEdgeForces(Y[row_i + offset], theta, neg, (*sum));
+        }
+        T sum_Q = 0.0;
+        for(size_t n = 0; n < mat->n_row; n++) sum_Q += sum_q[n];
+
+        // Compute final t-SNE gradient
+        for(size_t i = 0; i < mat->n_row * y_dim; i++) {
+            dY[i] = pos_f[i] - (neg_f[i] / sum_Q);
+        }
+
     }
 
     template<typename T>
