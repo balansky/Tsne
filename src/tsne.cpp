@@ -34,6 +34,55 @@ namespace tsne{
     }
 
     template<typename T>
+    static inline void updateStat(ushort dim, std::vector<T*> &v, T *mean_v, T &max_v){
+        std::unique_ptr<T[]> max_vs = std::unique_ptr<T[]>(new T[dim]());
+        std::fill(mean_v, mean_v + dim, .0);
+        ushort d = 0;
+        for(size_t i = 0; i < v.size(); i++){
+            for(d = 0; d < dim; d++){
+                mean_v[d] += v[i][d];
+            }
+        }
+        for(d = 0; d < dim; d++) mean_v[d] /= (T)v.size();
+        for(size_t i = 0; i < v.size(); i++){
+            for(d = 0; d < dim; d++){
+                T m = fabs(v[i][d] - mean_v[d]);
+                if(m > max_v) max_v = m;
+            }
+        }
+    }
+
+    template<typename T>
+    TSNE<T>::TSNE():x_dim(0), y_dim(0), n_total(0), x_max(0), x_mean(nullptr), y_max(0), y_mean(nullptr), rb_tree(nullptr){}
+
+    template<typename T>
+    TSNE<T>::TSNE(ushort x_dim, ushort y_dim): TSNE(){
+        this->x_dim = x_dim;
+        this->y_dim = y_dim;
+        x_mean = new T[x_dim];
+        y_mean = new T[y_dim];
+    }
+
+    template<typename T>
+    TSNE<T>::TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y):TSNE(x_dim, y_dim) {
+        insertItems(n, x, y);
+        updateStat(x_dim, X, x_mean, x_max);
+        updateStat(y_dim, Y, y_mean, y_max);
+    }
+
+    template<typename T>
+    TSNE<T>::~TSNE() {
+        delete rb_tree;
+        delete []x_mean;
+        for(auto iter = X.begin(); iter != X.end(); iter++){
+            delete [](*iter);
+        }
+        for(auto iter = Y.begin(); iter != Y.end(); iter++){
+            delete [](*iter);
+        }
+    }
+
+    template<typename T>
     void TSNE<T>::insertItems(size_t n, T *x, T *y){
         if(!rb_tree){
             rb_tree = new RedBlackTree<size_t, T>(x_dim);
@@ -56,10 +105,7 @@ namespace tsne{
                       int stop_lying_iter, int mom_switch_iter) {
         size_t offset = 0;
         size_t n_var = n_total + n;
-        std::unique_ptr<T[]> offset_mean(new T[y_dim]());
-        std::unique_ptr<T[]> y_mean(new T[y_dim]());
         if(partial) {
-            computeMean(0, n_total, y_dim, Y, offset_mean.get());
             offset = n_total;
             n_var = n;
         }
@@ -102,11 +148,15 @@ namespace tsne{
                 }
             }
             // Make solution zero-mean
-            computeMean(offset, n_total, y_dim, Y, y_mean.get());
+            if(!partial){
+                updateStat(y_dim, Y, y_mean, y_max);
+            }
 //            for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
             for(size_t i = 0; i < n_var; i++){
                 for(size_t dd = 0; dd < y_dim; dd++){
+//                    Y[i + offset][dd] = (Y[i + offset][dd] - y_mean[dd])/y_max;
                     Y[i + offset][dd] -= y_mean[dd];
+                    if(partial) Y[i + offset][dd] /= y_max;
                 }
             }
 
@@ -117,9 +167,12 @@ namespace tsne{
             if(iter == mom_switch_iter) momentum = final_momentum;
 
         }
+
         for(size_t i = 0; i < n_var; i++){
-            memcpy(y + i *y_dim, Y[i + offset], y_dim*sizeof(T));
+            memcpy(y + i *y_dim, Y[offset + i], y_dim*sizeof(T));
         }
+        updateStat(x_dim, X, x_mean, x_max);
+        updateStat(y_dim, Y, y_mean, y_max);
 
     }
 
@@ -217,6 +270,7 @@ namespace tsne{
         std::unique_ptr<size_t[]> indices = std::unique_ptr<size_t[]>(new size_t[n_total * k]);
         std::unique_ptr<T[]> distances = std::unique_ptr<T[]>(new T[n_total * k]);
 
+
 #pragma omp parallel for default(none) shared(indices, distances)
         for(size_t i = 0; i < n_total; i++) {
 
@@ -224,7 +278,11 @@ namespace tsne{
             size_t *idxi = indices.get() + i * k;
             T *dist = distances.get() + i * k;
 
-            rb_tree->search(X[i], k, true, false, idxi, dist);
+            rb_tree->search(X[i], k, false, idxi, dist);
+
+            for(size_t m = 0; m < k; m++){
+                dist[m] /= x_max;
+            }
 
             std::vector<std::pair<size_t, size_t>> var_points;
             recordVarPoints(k, offset, idxi, var_points);
@@ -263,7 +321,7 @@ namespace tsne{
             size_t *idxi = indices + i * k;
             T *dist = distances + i * k;
 
-            rb_tree->search(X[i], k, false, false, idxi, dist);
+            rb_tree->search(X[i], k, false, idxi, dist);
             size_t n = 0;
             std::vector<size_t> i_pos;
             std::vector<size_t> j_pos;

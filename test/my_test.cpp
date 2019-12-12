@@ -198,22 +198,24 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
 
 
         std::unique_ptr<double[]> rnd_dx = std::unique_ptr<double[]>(new double[nx*x_dim]);
+        std::unique_ptr<double[]> rnd_dxt = std::unique_ptr<double[]>(new double[nx*x_dim]);
         std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[nx*y_dim]);
         std::unique_ptr<double[]> rnd_dyt = std::unique_ptr<double[]>(new double[nx*y_dim]);
 
 
         for(int i = 0; i < nx*x_dim; i++){
             rnd_dx.get()[i] = static_cast<double>(rnd_x.get()[i]);
+            rnd_dxt.get()[i] = static_cast<double>(rnd_x.get()[i]);
         }
         for(int i = 0; i < nx*y_dim; i++){
             rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
             rnd_dyt.get()[i] = static_cast<double>(rnd_y.get()[i]);
         }
         double *dY = new double[nx * y_dim];
-        TSNE::testGradient(rnd_dx.get(), rnd_dy.get(), nx, x_dim, y_dim, 30, 0.5, dY);
+//        TSNE::testGradient(rnd_dx.get(), rnd_dy.get(), nx, x_dim, y_dim, 30, 0.5, dY);
 
 
-        tsne::TSNE<double> ts(nx, x_dim, y_dim, rnd_dx.get(), rnd_dyt.get());
+        tsne::TSNE<double> ts(nx, x_dim, y_dim, rnd_dxt.get(), rnd_dyt.get());
 //        double *dYt = new double[nx * y_dim];
 //        ts.testGradient(0, 30, 0.5, dYt);
 //        for(size_t i = 0; i < nx; i++){
@@ -224,7 +226,8 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         TSNE::run(rnd_dx.get(), nx, x_dim, rnd_dy.get(), y_dim, 30, 0.5, 1988, true, 10, 200, 200);
         ts.run(0, NULL, rnd_dyt.get(), 30, 0.5, false, false, 10, 200, 200);
         for(size_t i = 0; i < nx; i++){
-            BOOST_CHECK_CLOSE(rnd_dy[i], rnd_dyt[i], 0.1);
+            BOOST_CHECK_CLOSE(rnd_dy[i], rnd_dyt[i], 0.00001);
+//            BOOST_CHECK_EQUAL(rnd_dy[i], rnd_dyt[i]);
 
         }
     }

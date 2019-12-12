@@ -23,6 +23,10 @@ class TSNE{
     size_t n_total;
     std::vector<T*> X;
     std::vector<T*> Y;
+    T *x_mean;
+    T x_max;
+    T *y_mean;
+    T y_max;
     RedBlackTree<size_t, T> *rb_tree;
 
     struct Matrix{
@@ -167,28 +171,13 @@ class TSNE{
     void computeGaussianPerplexity(size_t offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P);
 
     void computeGaussianPerplexity(size_t offset, size_t k, T perplexity, DynamicMatrix *mat);
-//    void computeGaussianPerplexity(size_t n, T perplexity, T *x, Matrix &mat);
 
     public:
 
-    TSNE():x_dim(0), y_dim(0), n_total(0){}
-
-    TSNE(ushort x_dim, ushort y_dim): x_dim(x_dim), y_dim(y_dim), n_total(0), rb_tree(nullptr){}
-
-    TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y): TSNE(x_dim, y_dim){
-        insertItems(n, x, y);
-    };
-
-
-    ~TSNE(){
-        delete rb_tree;
-        for(auto iter = X.begin(); iter != X.end(); iter++){
-            delete [](*iter);
-        }
-        for(auto iter = Y.begin(); iter != Y.end(); iter++){
-            delete [](*iter);
-        }
-    }
+    TSNE();
+    TSNE(ushort x_dim, ushort y_dim);
+    TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y);
+    ~TSNE();
 
     void insertItems(size_t n, T *x, T *y);
 
@@ -198,9 +187,6 @@ class TSNE{
 
     void run(size_t n, T *x, T* y, T perplexity, T theta, bool exact,
              bool partial, int max_iter, int stop_lying_iter, int mom_switch_iter);
-
-    std::vector<T*>& getX(){ return X;}
-    std::vector<T*>& getY(){ return Y;}
 
 };
 

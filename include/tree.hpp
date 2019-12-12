@@ -40,8 +40,6 @@ private:
     ushort dim;
     std::vector<Node*> data;
     size_t n_total;
-    T *mean;
-    T max_v;
 
 protected:
 
@@ -197,7 +195,7 @@ protected:
         return node;
     }
 
-    void search(Node *node, const T *target, unsigned int k, std::priority_queue<HeapItem>& heap, T& tau)
+    void search(Node *node, const T *target, size_t k, bool dup, std::priority_queue<HeapItem>& heap, T& tau)
     {
         if (!node) return;    // indicates that we're done here
 
@@ -206,9 +204,13 @@ protected:
 
         // If current node within radius tau
         if (dist < tau) {
-            if (heap.size() == k) heap.pop();                // remove furthest node from result list (if we already have k results)
-            heap.push(HeapItem(node->indices[0], dist));           // add current node to result list
-            if (heap.size() == k) tau = heap.top().dist;    // update value of tau (farthest point in result list)
+            size_t n = dup ? (node->indices.size()):(dist != 0 ? 1 : 0);
+
+            for(size_t i = 0; i < n; i++){
+                if (heap.size() == k) heap.pop();                // remove furthest node from result list (if we already have k results)
+                heap.push(HeapItem(node->indices[i], dist));           // add current node to result list
+                if (heap.size() == k) tau = heap.top().dist;    // update value of tau (farthest point in result list)
+            }
         }
 
         // Return if we arrived at a leaf
@@ -218,19 +220,19 @@ protected:
 
         // if node is laied inside or intersect with the search radius
         if(dist <= tau || dist - node->radius <= tau){
-            search(node->left, target, k, heap, tau);
-            search(node->right, target, k, heap, tau);
+            search(node->left, target, k, dup, heap, tau);
+            search(node->right, target, k, dup,  heap, tau);
         }
             // if node is laied outside of the search radius
         else if(dist - node->radius > tau){
-            search(node->right, target, k, heap, tau);
+            search(node->right, target, k, dup, heap, tau);
         }
     }
 
 public:
-    RedBlackTree(): n_total(0), dim(0), max_v(0), _root(nullptr), mean(nullptr){}
-    explicit RedBlackTree(ushort dim): n_total(0), dim(dim), max_v(0), _root(nullptr){
-        mean = (T*) calloc(dim,sizeof(T));
+    RedBlackTree(): n_total(0), dim(0), _root(nullptr){}
+    explicit RedBlackTree(ushort dim): RedBlackTree(){
+        this->dim = dim;
     }
     RedBlackTree(size_t n, ushort dim, I *ids, T **inps): RedBlackTree(dim){
         insert(n, ids, inps);
@@ -238,10 +240,9 @@ public:
 
     ~RedBlackTree(){
         delete _root;
-        delete mean;
     }
 
-    void search(const T *target, int k, bool norm, bool dup,  I *results, T *distances){
+    void search(const T *target, size_t k, bool dup,  I *results, T *distances){
 
         std::priority_queue<HeapItem> heap;
 
@@ -249,12 +250,7 @@ public:
         T tau = std::numeric_limits<T>::max();
 
         // Perform the searcg
-        if(dup){
-            search(_root, target, k, heap, tau);
-        }
-        else{
-            search(_root, target, k + 1, heap, tau);
-        }
+        search(_root, target, k, dup, heap, tau);
 
         // Gather final results
         int i = 0;
@@ -262,8 +258,6 @@ public:
             T dist = heap.top().dist;
             I idx = heap.top().index;
             heap.pop();
-            if(!dup && dist == 0) continue;
-            if(norm) dist /= max_v;
             results[i] = idx;
             distances[i] = dist;
             i++;
@@ -274,10 +268,10 @@ public:
         std::reverse(distances, distances + i);
     }
 
-    void search(const T *target, int k, std::vector<I> &results, std::vector<T> &distances){
+    void search(const T *target, size_t k, std::vector<I> &results, std::vector<T> &distances){
         results.reserve(k);
         distances.reserve(k);
-        search(target, k, false, true, results.data(), distances.data());
+        search(target, k, false, results.data(), distances.data());
     }
 
     void insert(size_t n, I *ids, T **inps){
@@ -292,12 +286,6 @@ public:
             }
             data.push_back(node);
             n_total++;
-            for(ushort d = 0; d < dim; d++){
-                mean[d] = mean[d] * (T(n_total - 1.0) / T(n_total)) + (node->v[d] * (1.0 / T(n_total)));
-                if(fabs(node->v[d]) > max_v){
-                    max_v = fabs(node->v[d]);
-                }
-            }
         }
     }
 
