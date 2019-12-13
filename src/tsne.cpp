@@ -46,8 +46,18 @@ namespace tsne{
         for(d = 0; d < dim; d++) mean_v[d] /= (T)v.size();
         for(size_t i = 0; i < v.size(); i++){
             for(d = 0; d < dim; d++){
+//                T m = v[i][d] - mean_v[d];
                 T m = fabs(v[i][d] - mean_v[d]);
                 if(m > max_v) max_v = m;
+            }
+        }
+    }
+
+    template<typename T>
+    static inline void normalize(size_t begin_n, size_t end_n, ushort dim, std::vector<T*>&v, T *mean, T &max_v){
+        for(size_t i = begin_n; i < end_n; i++){
+            for(ushort d = 0; d < dim; d++){
+                v[i][d] = (v[i][d] - mean[d]) / max_v;
             }
         }
     }
@@ -121,6 +131,7 @@ namespace tsne{
         std::fill(gains.get(), gains.get() + (n_var * y_dim), 1.0);
 
         std::unique_ptr<Matrix> mat;
+        updateStat(x_dim, X, x_mean, x_max);
         if(exact){
             mat = std::unique_ptr<StaticMatrix>(new StaticMatrix(n_var, n_total));
         }
@@ -131,6 +142,9 @@ namespace tsne{
             mat = std::unique_ptr<SparseMatrix>(new SparseMatrix(std::move(dymat)));
         }
         (*mat) *= 12.0;
+
+//        updateStat(y_dim, Y, y_mean, y_max);
+//        normalize(0, n_total, y_dim, Y, y_mean, y_max);
 
         for(int iter = 0; iter < max_iter; iter++) {
 
@@ -147,16 +161,19 @@ namespace tsne{
                     Y[i + offset][dd] = Y[i + offset][dd] + uY[i*y_dim + dd];
                 }
             }
-            // Make solution zero-mean
-            if(!partial){
-                updateStat(y_dim, Y, y_mean, y_max);
-            }
-//            for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
-            for(size_t i = 0; i < n_var; i++){
+            updateStat(y_dim, Y, y_mean, y_max);
+//            // Make solution zero-mean
+//            if(!partial){
+//                updateStat(y_dim, Y, y_mean, y_max);
+//            }
+////            for(ushort d = 0; d < y_dim; d++) y_mean[d] = ((T)offset / (T)n_total)*offset_mean[d] + ((T)(n_total - offset)/ (T)n_total)*y_mean[d];
+            for(size_t i = 0; i < n_total; i++){
                 for(size_t dd = 0; dd < y_dim; dd++){
 //                    Y[i + offset][dd] = (Y[i + offset][dd] - y_mean[dd])/y_max;
-                    Y[i + offset][dd] -= y_mean[dd];
-                    if(partial) Y[i + offset][dd] /= y_max;
+                    Y[i][dd] -= y_mean[dd];
+//                    Y[i][dd] = (Y[i][dd] - y_mean[dd])/ y_max;
+
+//                    if(partial) Y[i + offset][dd] /= y_max;
                 }
             }
 
@@ -168,11 +185,17 @@ namespace tsne{
 
         }
 
-        for(size_t i = 0; i < n_var; i++){
-            memcpy(y + i *y_dim, Y[offset + i], y_dim*sizeof(T));
+//        updateStat(y_dim, Y, y_mean, y_max);
+//        normalize(offset, n_total, y_dim, Y, y_mean, y_max);
+
+//        for(size_t i = 0; i < n_var; i++){
+//            memcpy(y + i *y_dim, Y[offset + i], y_dim*sizeof(T));
+//        }
+
+        for(size_t i = 0; i < n_total; i++){
+            memcpy(y + i *y_dim, Y[i], y_dim*sizeof(T));
         }
-        updateStat(x_dim, X, x_mean, x_max);
-        updateStat(y_dim, Y, y_mean, y_max);
+//        updateStat(y_dim, Y, y_mean, y_max);
 
     }
 
@@ -386,38 +409,40 @@ namespace tsne{
                 std::unique_ptr<tsne::BarnesHutTree<T>>(new tsne::BarnesHutTree<T>(n_total, y_dim, Y.data()));
 
         // Compute all terms required for t-SNE gradient
-        std::unique_ptr<T[]> sum_q = std::unique_ptr<T[]>(new T[mat->n_row]());
+        std::unique_ptr<T[]> sum_q = std::unique_ptr<T[]>(new T[n_total]());
         std::unique_ptr<T[]> pos_f = std::unique_ptr<T[]>(new T[mat->n_row * y_dim]());
-        std::unique_ptr<T[]> neg_f = std::unique_ptr<T[]>(new T[mat->n_row * y_dim]());
+        std::unique_ptr<T[]> neg_f = std::unique_ptr<T[]>(new T[n_total * y_dim]());
         std::unique_ptr<T[]> buffs = std::unique_ptr<T[]>(new T[mat->n_row * y_dim]());
 
         // Loop over all edges in the graph
 #pragma omp parallel for default(none) shared(sum_q, pos_f, neg_f, buffs, sum_q, mat, Y)
-        for(size_t row_i = 0; row_i < mat->n_row; row_i++) {
-            T *sum = sum_q.get() + row_i;
-            T *neg = neg_f.get() + row_i*y_dim;
-            T *pos = pos_f.get() + row_i*y_dim;
-            T * buff = buffs.get() + row_i*y_dim;
-            size_t row_size = mat->getRowSize(row_i);
-            for(size_t col_i = 0; col_i < row_size; col_i++){
-                size_t idx = mat->getIndex(row_i, col_i);
-                T D = 1.0;
-                for(size_t d = 0; d < y_dim; d++) buff[d] = Y[row_i + offset][d] - Y[idx][d];
-                for(size_t d = 0; d < y_dim; d++) D += buff[d] * buff[d];
-                D = mat->getValue(row_i, col_i) / D;
+        for(size_t i = 0; i < n_total; i++) {
+            T *sum = sum_q.get() + i;
+            T *neg = neg_f.get() + i*y_dim;
+            if(i >= offset){
+                size_t row_i = i - offset;
+                T *pos = pos_f.get() + row_i*y_dim;
+                T * buff = buffs.get() + row_i*y_dim;
+                size_t row_size = mat->getRowSize(row_i);
+                for(size_t col_i = 0; col_i < row_size; col_i++){
+                    size_t idx = mat->getIndex(row_i, col_i);
+                    T D = 1.0;
+                    for(size_t d = 0; d < y_dim; d++) buff[d] = Y[i][d] - Y[idx][d];
+                    for(size_t d = 0; d < y_dim; d++) D += buff[d] * buff[d];
+                    D = mat->getValue(row_i, col_i) / D;
 
-                for(size_t d = 0; d < y_dim; d++) pos[d] += D * buff[d];
+                    for(size_t d = 0; d < y_dim; d++) pos[d] += D * buff[d];
+                }
             }
-            tree->computeNonEdgeForces(Y[row_i + offset], theta, neg, (*sum));
+            tree->computeNonEdgeForces(Y[i], theta, neg, (*sum));
         }
         T sum_Q = 0.0;
-        for(size_t n = 0; n < mat->n_row; n++) sum_Q += sum_q[n];
+        for(size_t n = 0; n < n_total; n++) sum_Q += sum_q[n];
 
         // Compute final t-SNE gradient
         for(size_t i = 0; i < mat->n_row * y_dim; i++) {
-            dY[i] = pos_f[i] - (neg_f[i] / sum_Q);
+            dY[i] = pos_f[i] - (neg_f[i + offset*y_dim] / sum_Q);
         }
-
     }
 
     template<typename T>

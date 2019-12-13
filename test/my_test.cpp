@@ -297,7 +297,7 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         std::unique_ptr<float[]> rnd_y = std::unique_ptr<float[]>(new float[var_n*2]);
         simile::float_rand(rnd_y.get(), var_n*2, 1982);
 
-        std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[var_n*2]);
+        std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[(var_n + fixed_n)*2]);
 //        std::unique_ptr<double[]> rnd_dyt = std::unique_ptr<double[]>(new double[var_n*2]);
 
         for(int i = 0; i < var_n*2; i++){
@@ -305,16 +305,18 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         }
 
         tsne::TSNE<double> ts(fixed_n, target_dim, 2, features.data(), ys.data());
+//        double * ret_ys = new double[fixed_n + var_n];
 
-        ts.run(var_n, var_features.data(), rnd_dy.get(), 30, 0.5, false, true, 1000, 300, 300);
+        ts.run(var_n, var_features.data(), rnd_dy.get(), 30, 0.5, false, true, 500, 200, 200);
 
         features.insert(features.end(), var_features.begin(), var_features.end());
-        ys.insert(ys.end(), rnd_dy.get(), rnd_dy.get() + var_n * 2);
+//        ys.insert(ys.end(), rnd_dy.get(), rnd_dy.get() + var_n * 2);
         for(int i = 0; i < var_n; i++){
             image_uris.push_back(var_image_uris[i]);
         }
 
-        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), ys.data(), pca.data(), image_uris);
+        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), rnd_dy.get(), pca.data(), image_uris);
+//        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), ys.data(), pca.data(), image_uris);
 
     }
 
