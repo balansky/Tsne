@@ -23,11 +23,8 @@ class TSNE{
     size_t n_total;
     std::vector<T*> X;
     std::vector<T*> Y;
-    T *x_mean;
-    T x_max;
-    T *y_mean;
-    T y_max;
     RedBlackTree<size_t, T> *rb_tree;
+    BarnesHutTree<T> *bh_tree;
 
     struct Matrix{
         size_t n;
@@ -163,14 +160,18 @@ class TSNE{
 
 
 //    void runTraining(size_t offset, size_t max_iters, T theta, T eta, T momentum, Matrix *mat);
-    void makeSymmtric(size_t n_offset, std::unordered_map<size_t, T> *lk, size_t **row_P, size_t **col_P, T **val_P);
+    void insertX(size_t n, T *x);
+    void insertY(size_t n, T *y);
+    void insertRandomY(size_t n);
+    void zeroMean(size_t n, T **y);
     void makeSymmtric(DynamicMatrix *mat);
-    void computeGradient(size_t run_n, size_t offset, T theta, size_t *row_P, size_t *col_P, T *val_P, T *dY);
-    void computeGradient(size_t offset, T theta, Matrix *mat, T *dY);
+    T computeSumQ(T theta);
+    void updateGradient(size_t n, T eta, T momentum, T *dY, T *uY, T *gains, T **y);
+    void computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY);
     void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
-    void computeGaussianPerplexity(size_t offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P);
-
-    void computeGaussianPerplexity(size_t offset, size_t k, T perplexity, DynamicMatrix *mat);
+    void computeGaussianPerplexity(size_t k, T perplexity, tsne::TSNE<T>::DynamicMatrix *dynamic_val_P);
+    void runTraining(size_t n, T perplexity, T theta,
+            int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
 
     public:
 
@@ -181,12 +182,9 @@ class TSNE{
 
     void insertItems(size_t n, T *x, T *y);
 
-    void testGaussianPerplexity(size_t n_offset, size_t k, T perplexity, size_t **row_P, size_t **col_P, T **val_P);
+    void run(T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
 
-    void testGradient(size_t offset, T perplexity, T theta, T *dY);
-
-    void run(size_t n, T *x, T* y, T perplexity, T theta, bool exact,
-             bool partial, int max_iter, int stop_lying_iter, int mom_switch_iter);
+    void run(size_t n, T *x, T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
 
 };
 

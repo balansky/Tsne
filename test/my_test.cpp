@@ -119,119 +119,6 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
 
     }
 
-    BOOST_AUTO_TEST_CASE(tsne_construct_test){
-
-        struct NodeHolder{
-            size_t idx;
-            double val;
-
-            bool operator!=(const NodeHolder &b) const{
-                return (this->idx != b.idx || this->val != b.val);
-            }
-        };
-
-        int nx = 1000;
-        int x_dim = 512;
-        int y_dim = 2;
-        std::unique_ptr<float[]> rnd_x = std::unique_ptr<float[]>(new float[nx*x_dim]);
-        simile::float_rand(rnd_x.get(), nx*x_dim, 1988);
-
-        std::unique_ptr<float[]> rnd_y = std::unique_ptr<float[]>(new float[nx*y_dim]);
-        simile::float_rand(rnd_y.get(), nx*y_dim, 1982);
-
-
-        std::unique_ptr<double[]> rnd_dx = std::unique_ptr<double[]>(new double[nx*x_dim]);
-        std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[nx*y_dim]);
-
-        for(int i = 0; i < nx*x_dim; i++){
-            rnd_dx.get()[i] = static_cast<double>(rnd_x.get()[i]);
-        }
-        for(int i = 0; i < nx*y_dim; i++){
-            rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
-        }
-
-        unsigned int* row_P; unsigned int* col_P; double* val_P;
-        TSNE::testGaussianPerplexity(rnd_dx.get(), nx, x_dim, &row_P, &col_P, &val_P, 30, 90);
-
-
-        size_t *t_row_P; size_t *t_col_P; double *t_val_P;
-
-        tsne::TSNE<double> ts(nx, x_dim, y_dim,rnd_dx.get(), rnd_dy.get());
-        ts.testGaussianPerplexity(0, 90, 30, &t_row_P, &t_col_P, &t_val_P);
-        for(size_t i = 0; i < nx; i++){
-
-            BOOST_CHECK_EQUAL(row_P[i], t_row_P[i]);
-            std::vector<NodeHolder> ls;
-            std::vector<NodeHolder> rs;
-            for(size_t j = row_P[i]; j < row_P[i + 1]; j ++){
-                NodeHolder l;
-                l.idx = col_P[j];
-                l.val = val_P[j];
-                ls.push_back(l);
-
-                NodeHolder r;
-                r.idx = t_col_P[j];
-                r.val = t_val_P[j];
-                rs.push_back(r);
-            }
-            std::sort(ls.begin(), ls.end(), [](const NodeHolder &a, const NodeHolder &b)->bool{return a.idx > b.idx;});
-            std::sort(rs.begin(), rs.end(), [](const NodeHolder &a, const NodeHolder &b)->bool{return a.idx > b.idx;});
-            for(size_t k = 0; k < ls.size(); k++){
-                BOOST_CHECK_EQUAL(ls[k].idx, rs[k].idx);
-                BOOST_CHECK_EQUAL(ls[k].val, rs[k].val);
-//                BOOST_CHECK_CLOSE(ls[k].val, rs[k].val, 0.00001);
-            }
-        }
-
-    }
-
-    BOOST_AUTO_TEST_CASE(tsne_gradient_test){
-
-        int nx = 1000;
-        int x_dim = 512;
-        int y_dim = 2;
-        std::unique_ptr<float[]> rnd_x = std::unique_ptr<float[]>(new float[nx*x_dim]);
-        simile::float_rand(rnd_x.get(), nx*x_dim, 1988);
-
-        std::unique_ptr<float[]> rnd_y = std::unique_ptr<float[]>(new float[nx*y_dim]);
-        simile::float_rand(rnd_y.get(), nx*y_dim, 1982);
-
-
-        std::unique_ptr<double[]> rnd_dx = std::unique_ptr<double[]>(new double[nx*x_dim]);
-        std::unique_ptr<double[]> rnd_dxt = std::unique_ptr<double[]>(new double[nx*x_dim]);
-        std::unique_ptr<double[]> rnd_dy = std::unique_ptr<double[]>(new double[nx*y_dim]);
-        std::unique_ptr<double[]> rnd_dyt = std::unique_ptr<double[]>(new double[nx*y_dim]);
-
-
-        for(int i = 0; i < nx*x_dim; i++){
-            rnd_dx.get()[i] = static_cast<double>(rnd_x.get()[i]);
-            rnd_dxt.get()[i] = static_cast<double>(rnd_x.get()[i]);
-        }
-        for(int i = 0; i < nx*y_dim; i++){
-            rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
-            rnd_dyt.get()[i] = static_cast<double>(rnd_y.get()[i]);
-        }
-        double *dY = new double[nx * y_dim];
-//        TSNE::testGradient(rnd_dx.get(), rnd_dy.get(), nx, x_dim, y_dim, 30, 0.5, dY);
-
-
-        tsne::TSNE<double> ts(nx, x_dim, y_dim, rnd_dxt.get(), rnd_dyt.get());
-//        double *dYt = new double[nx * y_dim];
-//        ts.testGradient(0, 30, 0.5, dYt);
-//        for(size_t i = 0; i < nx; i++){
-////            BOOST_CHECK_CLOSE(dY[i], dYt[i], 0.00001);
-//            BOOST_CHECK_EQUAL(dY[i], dYt[i]);
-//        }
-
-        TSNE::run(rnd_dx.get(), nx, x_dim, rnd_dy.get(), y_dim, 30, 0.5, 1988, true, 10, 200, 200);
-        ts.run(0, NULL, rnd_dyt.get(), 30, 0.5, false, false, 10, 200, 200);
-        for(size_t i = 0; i < nx; i++){
-            BOOST_CHECK_CLOSE(rnd_dy[i], rnd_dyt[i], 0.00001);
-//            BOOST_CHECK_EQUAL(rnd_dy[i], rnd_dyt[i]);
-
-        }
-    }
-
 
     BOOST_AUTO_TEST_CASE(tsne_generate){
 
@@ -261,10 +148,11 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
             rnd_dy.get()[i] = static_cast<double>(rnd_y.get()[i]);
         }
 
-        tsne::TSNE<double> ts(n, target_dim, 2, features.data(), rnd_dy.get());
+//        tsne::TSNE<double> ts(n, target_dim, 2, features.data(), rnd_dy.get());
+        tsne::TSNE<double> ts(target_dim, 2);
+        ts.run(n, features.data(), 30, 0.5, 1000, 200, 200, rnd_dy.get());
 
-        ts.run(0, NULL, rnd_dyt.get(), 30, 0.5, false, false, 1000, 200, 200);
-        tsne::save_device_features(output_path, n, source_dim, target_dim, features.data(), rnd_dyt.get(), pca.data(), image_uris);
+        tsne::save_device_features(output_path, n, source_dim, target_dim, features.data(), rnd_dy.get(), pca.data(), image_uris);
 
     }
 
@@ -305,18 +193,17 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
         }
 
         tsne::TSNE<double> ts(fixed_n, target_dim, 2, features.data(), ys.data());
-//        double * ret_ys = new double[fixed_n + var_n];
 
-        ts.run(var_n, var_features.data(), rnd_dy.get(), 30, 0.5, false, true, 500, 200, 200);
+        ts.run(var_n, var_features.data(), 30, 0.5, 300, 200, 200, rnd_dy.get());
 
         features.insert(features.end(), var_features.begin(), var_features.end());
-//        ys.insert(ys.end(), rnd_dy.get(), rnd_dy.get() + var_n * 2);
+        ys.insert(ys.end(), rnd_dy.get(), rnd_dy.get() + var_n * 2);
         for(int i = 0; i < var_n; i++){
             image_uris.push_back(var_image_uris[i]);
         }
 
-        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), rnd_dy.get(), pca.data(), image_uris);
-//        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), ys.data(), pca.data(), image_uris);
+//        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), rnd_dy.get(), pca.data(), image_uris);
+        tsne::save_device_features(output_path, fixed_n + var_n, source_dim, target_dim, features.data(), ys.data(), pca.data(), image_uris);
 
     }
 
