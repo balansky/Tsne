@@ -51,18 +51,16 @@ namespace tsne{
 
 
     template<typename T>
-    TSNE<T>::TSNE():x_dim(0), y_dim(0), n_total(0), bh_tree(nullptr), rb_tree(nullptr){}
+    TSNE<T>::TSNE():verbose(false), x_dim(0), y_dim(0), n_total(0), bh_tree(nullptr), rb_tree(nullptr){}
 
     template<typename T>
-    TSNE<T>::TSNE(ushort x_dim, ushort y_dim): TSNE(){
-        this->x_dim = x_dim;
-        this->y_dim = y_dim;
-        rb_tree = new RedBlackTree<size_t, T>(x_dim);
+    TSNE<T>::TSNE(ushort x_dim, ushort y_dim, bool verbose): verbose(verbose), x_dim(x_dim), y_dim(y_dim), n_total(0){
         bh_tree = new BarnesHutTree<T>(y_dim);
+        rb_tree = new RedBlackTree<size_t, T>(x_dim);
     }
 
     template<typename T>
-    TSNE<T>::TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y):TSNE(x_dim, y_dim) {
+    TSNE<T>::TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y, bool verbose):TSNE(x_dim, y_dim, verbose) {
         insertItems(n, x, y);
     }
 
@@ -162,51 +160,65 @@ namespace tsne{
 
 
     template<typename T>
-    void TSNE<T>::computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY) {
+    T TSNE<T>::computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY) {
 
         // Construct space-partitioning tree on current map
         size_t bh_size = bh_tree? bh_tree->treeTotal(): 0;
-        if(n_total - bh_size != val_P->n_row){
-            std::string ss = "something wrong";
-        }
+
         std::unique_ptr<tsne::BarnesHutTree<T>> sub_bh_tree =
                 std::unique_ptr<tsne::BarnesHutTree<T>>(new tsne::BarnesHutTree<T>(val_P->n_row, y_dim, Y.data() + bh_size));
 
         // Compute all terms required for t-SNE gradient
         std::unique_ptr<T[]> pos_f = std::unique_ptr<T[]>(new T[val_P->n_row * y_dim]());
         std::unique_ptr<T[]> neg_f = std::unique_ptr<T[]>(new T[n_total * y_dim]());
-        std::unique_ptr<T[]> buffs = std::unique_ptr<T[]>(new T[val_P->n_row * y_dim]());
+
+        T val_P_sum = .0;
+        T C = .0;
 
         // Loop over all edges in the graph
-#pragma omp parallel for reduction(+:sum_Q)
+#pragma omp parallel for reduction(+:sum_Q, val_P_sum, C)
         for(size_t i = 0; i < n_total; i++) {
             T *neg = neg_f.get() + i*y_dim;
             T sum_q = .0;
-            if(i >= bh_size){
+            T i_p_sum = .0;
+            T i_c = .0;
+            if(bh_tree && i >= bh_size){
                 size_t row_i = i - bh_size;
                 T *pos = pos_f.get() + row_i*y_dim;
-                T * buff = buffs.get() + row_i*y_dim;
-                for(size_t col_i = 0; col_i < val_P->getRowSize(row_i); col_i++){
-                    size_t idx = val_P->getIndex(row_i, col_i);
-                    T D = 1.0;
-                    for(size_t d = 0; d < y_dim; d++) buff[d] = Y[i][d] - Y[idx][d];
-                    for(size_t d = 0; d < y_dim; d++) D += buff[d] * buff[d];
-                    D = val_P->getValue(row_i, col_i) / D;
-
-                    for(size_t d = 0; d < y_dim; d++) pos[d] += D * buff[d];
-                }
+                computeEdgeForces(row_i, val_P, pos,i_p_sum,i_c);
                 bh_tree->computeNonEdgeForces(Y[i], theta, neg, sum_q);
             }
-
             sub_bh_tree->computeNonEdgeForces(Y[i], theta, neg, sum_q);
             sum_Q += sum_q;
+            val_P_sum += i_p_sum;
+            C += i_c;
         }
-
         // Compute final t-SNE gradient
         for(size_t i = 0; i < val_P->n_row * y_dim; i++) {
             dY[i] = pos_f[i] - (neg_f[i + bh_size*y_dim] / sum_Q);
         }
+        C += val_P_sum * log(sum_Q);
+        return C;
     }
+
+    template<typename T>
+    void TSNE<T>::computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_p_sum, T &i_c) {
+        for(size_t col_i = 0; col_i < val_P->getRowSize(i); col_i++){
+            size_t idx = val_P->getIndex(i, col_i);
+            T D = 1.0;
+            for(size_t d = 0; d < y_dim; d++){
+                T t = Y[bh_tree->treeTotal() + i][d] - Y[idx][d];
+                D += t * t;
+            }
+            T inp_val_P = val_P->getValue(i, col_i);
+            i_p_sum += inp_val_P;
+            i_c += inp_val_P * log((inp_val_P + FLT_MIN) / ((1.0 / D) + FLT_MIN));
+            D = inp_val_P / D;
+            for(size_t d = 0; d < y_dim; d++) pos[d] += D * (Y[bh_tree->treeTotal() + i][d] - Y[idx][d]);
+        }
+
+    }
+
 
     template<typename T>
     T TSNE<T>::computeSumQ(T theta) {
@@ -250,12 +262,12 @@ namespace tsne{
         }
         for(d = 0; d < y_dim; d++) mean_[d] /= n;
 
-        if(bh_tree && bh_tree->treeTotal() > 0){
-            T* bh_mean = bh_tree->treeMean();
-            T mult1 = (T)bh_tree->treeTotal() /(T) n_total;
-            T mult2 = (T)n / (T)n_total;
-            for(d = 0; d < y_dim; d++) mean_[d] = bh_mean[d] * mult1 + mean_[d] * mult2;
-        }
+//        if(bh_tree && bh_tree->treeTotal() > 0){
+//            T* bh_mean = bh_tree->treeMean();
+//            T mult1 = (T)bh_tree->treeTotal() /(T) n_total;
+//            T mult2 = (T)n / (T)n_total;
+//            for(d = 0; d < y_dim; d++) mean_[d] = bh_mean[d] * mult1 + mean_[d] * mult2;
+//        }
         for(i = 0; i < n; i++){
             for(d = 0; d < y_dim; d++){
                 y[i][d] -= mean_[d];
@@ -266,16 +278,26 @@ namespace tsne{
     template<typename T>
     void TSNE<T>::runTraining(size_t n, T perplexity, T theta,
                               int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret) {
+        if (n_total - 1 < 3 * perplexity) {
+            perplexity = T(n_total - 1) / 3.;
+            if (verbose)
+                fprintf(stderr, "Perplexity too large for the number of data points! Adjusting To %f ...\n", perplexity);
+        }
+        float total_time = .0;
+        time_t start, end;
         T momentum = .5, final_momentum = .8;
         T eta = 200.0;
         size_t bh_size = bh_tree ? bh_tree->treeTotal(): 0;
-
+        if (verbose)
+            fprintf(stdout, "Using no_dims = %d, perplexity = %f, and theta = %f\n", y_dim, perplexity, theta);
         std::unique_ptr<T[]> dY(new T[n * y_dim]);
         std::unique_ptr<T[]> uY(new T[n * y_dim]());
         std::unique_ptr<T[]> gains(new T[n * y_dim]);
         std::fill(gains.get(), gains.get() + (n * y_dim), 1.0);
 
         std::unique_ptr<Matrix> val_P;
+
+        start = time(0);
 
         size_t k = (int) (3 * perplexity);
         DynamicMatrix dynamic_val_P(n);
@@ -284,10 +306,16 @@ namespace tsne{
         T sum_Q = computeSumQ(theta);
 
         (*val_P) *= 12.0;
+        end = time(0);
+        if (verbose)
+            fprintf(stdout, "Done in %4.2f seconds (sparsity = %f)!\nLearning embedding...\n", (float)(end - start) , (double) val_P->n / ((double) n_total * (double) n_total));
 
+        start = time(0);
         for(int iter = 0; iter < max_iter; iter++) {
 
-            computeGradient(theta, sum_Q, val_P.get(), dY.get());
+            bool need_eval_error = (verbose && ((iter > 0 && iter % 50 == 0) || (iter == max_iter - 1)));
+
+            T error = computeGradient(theta, sum_Q, val_P.get(), dY.get());
             updateGradient(n, eta, momentum, dY.get(), uY.get(), gains.get(), Y.data() + bh_size);
             zeroMean(n, Y.data() + bh_size);
 
@@ -295,7 +323,23 @@ namespace tsne{
                 (*val_P) /= 12.0;
             }
             if(iter == mom_switch_iter) momentum = final_momentum;
+            // Print out progress
+            if (need_eval_error) {
+                end = time(0);
+
+                if (iter == 0)
+                    fprintf(stdout, "Iteration %d: error is %f\n", iter + 1, error);
+                else {
+                    total_time += (float) (end - start);
+                    fprintf(stdout, "Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter + 1, error, (float) (end - start) );
+                }
+                start = time(0);
+            }
         }
+
+        end = time(0); total_time += (float) (end - start) ;
+        if (verbose)
+            fprintf(stdout, "Fitting performed in %4.2f seconds.\n", total_time);
 
         for(size_t i = 0; i < n; i++){
             memcpy(ret + i *y_dim, Y[i + bh_size], y_dim*sizeof(T));
@@ -381,7 +425,6 @@ namespace tsne{
             iter++;
         }
         for(size_t m = 0; m < k; m++) cur_P[m] /= sum_P;
-
     }
 
     template class TSNE<float>;

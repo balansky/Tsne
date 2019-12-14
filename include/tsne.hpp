@@ -5,6 +5,7 @@
 #ifndef TSNE_TSNE_HPP
 #define TSNE_TSNE_HPP
 
+#include <float.h>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -18,13 +19,14 @@ class TSNE{
 
     protected:
 
+    bool verbose;
     ushort x_dim;
     ushort y_dim;
     size_t n_total;
     std::vector<T*> X;
     std::vector<T*> Y;
-    RedBlackTree<size_t, T> *rb_tree;
     BarnesHutTree<T> *bh_tree;
+    RedBlackTree<size_t, T> *rb_tree;
 
     struct Matrix{
         size_t n;
@@ -125,10 +127,6 @@ class TSNE{
             size_t j = 0;
             for(size_t i = 0; i < this->n_row; i++){
                 for(auto iter = mat.rows[i].begin(); iter != mat.rows[i].end(); iter++){
-                    size_t tmpid = iter->first;
-                    if(tmpid < 2000){
-                        int f = 1;
-                    }
                     col_P[j] = iter->first;
                     this->val_P[j] = iter->second;
                     j++;
@@ -158,7 +156,6 @@ class TSNE{
         }
     };
 
-
 //    void runTraining(size_t offset, size_t max_iters, T theta, T eta, T momentum, Matrix *mat);
     void insertX(size_t n, T *x);
     void insertY(size_t n, T *y);
@@ -166,8 +163,9 @@ class TSNE{
     void zeroMean(size_t n, T **y);
     void makeSymmtric(DynamicMatrix *mat);
     T computeSumQ(T theta);
+    T computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY);
     void updateGradient(size_t n, T eta, T momentum, T *dY, T *uY, T *gains, T **y);
-    void computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY);
+    void computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_sum_P, T &C);
     void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
     void computeGaussianPerplexity(size_t k, T perplexity, tsne::TSNE<T>::DynamicMatrix *dynamic_val_P);
     void runTraining(size_t n, T perplexity, T theta,
@@ -176,8 +174,8 @@ class TSNE{
     public:
 
     TSNE();
-    TSNE(ushort x_dim, ushort y_dim);
-    TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y);
+    TSNE(ushort x_dim, ushort y_dim, bool verbose=false);
+    TSNE(size_t n, ushort x_dim, ushort y_dim, T *x, T *y, bool verbose=false);
     ~TSNE();
 
     void insertItems(size_t n, T *x, T *y);

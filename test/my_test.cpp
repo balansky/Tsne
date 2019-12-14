@@ -119,6 +119,19 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
 
     }
 
+    BOOST_AUTO_TEST_CASE(tsne_run){
+
+        int nx = 2000;
+        ushort x_dim = 512;
+        ushort y_dim = 2;
+        std::unique_ptr<float[]> rnd_x = std::unique_ptr<float[]>(new float[nx*x_dim]);
+        std::unique_ptr<float[]> y_ret = std::unique_ptr<float[]>(new float[nx*y_dim]);
+        simile::float_rand(rnd_x.get(), nx*x_dim, 1988);
+        tsne::TSNE<float> ts(x_dim, y_dim);
+
+        ts.run(nx, rnd_x.get(), 30, 0.5, 1000, 250, 250, y_ret.get());
+
+    }
 
     BOOST_AUTO_TEST_CASE(tsne_generate){
 
