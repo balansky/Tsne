@@ -123,7 +123,7 @@ namespace tsne{
 
         size_t bh_size = bh_tree ? bh_tree->treeTotal() : 0;
 
-#pragma omp parallel for default(none) shared(indices, distances)
+#pragma omp parallel for default(none) shared(k, perplexity, bh_size, max_v, indices, distances, dynamic_val_P)
         for (size_t i = 0; i < n_total; i++) {
 
 //          Find nearest neighbors
@@ -281,7 +281,7 @@ namespace tsne{
         if (n_total - 1 < 3 * perplexity) {
             perplexity = T(n_total - 1) / 3.;
             if (verbose)
-                fprintf(stderr, "Perplexity too large for the number of data points! Adjusting To %f ...\n", perplexity);
+                fprintf(stdout, "Perplexity too large for the number of data points! Adjusting To %f ...\n", perplexity);
         }
         float total_time = .0;
         time_t start, end;
