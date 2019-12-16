@@ -5,7 +5,7 @@
 #ifndef TSNE_TSNE_HPP
 #define TSNE_TSNE_HPP
 
-#include <float.h>
+#include <cfloat>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -86,30 +86,6 @@ class TSNE{
 
     };
 
-    struct StaticMatrix:Matrix{
-        size_t n_col;
-
-        StaticMatrix():Matrix(), n_col(0){}
-        StaticMatrix(size_t n_row, size_t n_col): Matrix(n_row * n_col, n_row), n_col(n_col){}
-
-        void assign(size_t row_i, size_t col_i, T val){
-            (this->val_P + row_i*n_col)[col_i] = val;
-        }
-
-        T getValue(size_t row_i, size_t col_i) override{
-            return (this->val_P + row_i*n_col)[col_i];
-        }
-
-        size_t getIndex(size_t row_i, size_t col_i) override{
-            return col_i;
-        }
-
-        size_t getRowSize(size_t row_i) override {
-            return n_col;
-        };
-
-    };
-
     struct SparseMatrix: Matrix{
         size_t *row_P;
         size_t *col_P;
@@ -156,16 +132,15 @@ class TSNE{
         }
     };
 
-//    void runTraining(size_t offset, size_t max_iters, T theta, T eta, T momentum, Matrix *mat);
     void insertX(size_t n, T *x);
     void insertY(size_t n, T *y);
     void insertRandomY(size_t n);
     void zeroMean(size_t n, T **y);
     void makeSymmtric(DynamicMatrix *mat);
     T computeSumQ(T theta);
-    T computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY);
+    T computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY, bool eval);
     void updateGradient(size_t n, T eta, T momentum, T *dY, T *uY, T *gains, T **y);
-    void computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_sum_P, T &C);
+    void computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_sum_P, T &C, bool eval);
     void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
     void computeGaussianPerplexity(size_t k, T perplexity, tsne::TSNE<T>::DynamicMatrix *dynamic_val_P);
     void runTraining(size_t n, T perplexity, T theta,

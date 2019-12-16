@@ -329,7 +329,7 @@ class BarnesHutTree{
         Cell():cum_size(0),is_leaf(true), center(nullptr),width(nullptr),center_of_mass(nullptr){};
 
         explicit Cell(ushort dim):Cell(){
-            center = (T*)calloc(dim, sizeof(T));
+            center = new T[dim]();
             width = new T[dim];
         }
 
@@ -339,7 +339,6 @@ class BarnesHutTree{
 
             for(size_t i = 0; i < n; i++){
                 for(ushort j = 0; j < dims; j++){
-//                    center[j] += inp[j + i*dims];
                     center[j] += inps[i][j];
                     min_Y[j] = std::min<T>(min_Y[j], inps[i][j]);
                     max_Y[j] = std::max<T>(max_Y[j], inps[i][j]);

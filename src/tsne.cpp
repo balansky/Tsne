@@ -121,7 +121,7 @@ namespace tsne{
         std::unique_ptr<T[]> distances = std::unique_ptr<T[]>(new T[n_total * k]);
         T max_v = maxValue(x_dim, X, rb_tree->treeMean());
 
-        size_t bh_size = bh_tree ? bh_tree->treeTotal() : 0;
+        size_t bh_size = bh_tree->treeTotal();
 
 #pragma omp parallel for default(none) shared(k, perplexity, bh_size, max_v, indices, distances, dynamic_val_P)
         for (size_t i = 0; i < n_total; i++) {
@@ -160,10 +160,10 @@ namespace tsne{
 
 
     template<typename T>
-    T TSNE<T>::computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY) {
+    T TSNE<T>::computeGradient(T theta, T sum_Q, tsne::TSNE<T>::Matrix *val_P, T *dY, bool eval) {
 
         // Construct space-partitioning tree on current map
-        size_t bh_size = bh_tree? bh_tree->treeTotal(): 0;
+        size_t bh_size = bh_tree->treeTotal();
 
         std::unique_ptr<tsne::BarnesHutTree<T>> sub_bh_tree =
                 std::unique_ptr<tsne::BarnesHutTree<T>>(new tsne::BarnesHutTree<T>(val_P->n_row, y_dim, Y.data() + bh_size));
@@ -182,10 +182,10 @@ namespace tsne{
             T sum_q = .0;
             T i_p_sum = .0;
             T i_c = .0;
-            if(bh_tree && i >= bh_size){
+            if(i >= bh_size){
                 size_t row_i = i - bh_size;
                 T *pos = pos_f.get() + row_i*y_dim;
-                computeEdgeForces(row_i, val_P, pos,i_p_sum,i_c);
+                computeEdgeForces(row_i, val_P, pos,i_p_sum,i_c, eval);
                 bh_tree->computeNonEdgeForces(Y[i], theta, neg, sum_q);
             }
             sub_bh_tree->computeNonEdgeForces(Y[i], theta, neg, sum_q);
@@ -202,7 +202,7 @@ namespace tsne{
     }
 
     template<typename T>
-    void TSNE<T>::computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_p_sum, T &i_c) {
+    void TSNE<T>::computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_p_sum, T &i_c, bool eval) {
         for(size_t col_i = 0; col_i < val_P->getRowSize(i); col_i++){
             size_t idx = val_P->getIndex(i, col_i);
             T D = 1.0;
@@ -211,8 +211,10 @@ namespace tsne{
                 D += t * t;
             }
             T inp_val_P = val_P->getValue(i, col_i);
-            i_p_sum += inp_val_P;
-            i_c += inp_val_P * log((inp_val_P + FLT_MIN) / ((1.0 / D) + FLT_MIN));
+            if(eval){
+                i_p_sum += inp_val_P;
+                i_c += inp_val_P * log((inp_val_P + FLT_MIN) / ((1.0 / D) + FLT_MIN));
+            }
             D = inp_val_P / D;
             for(size_t d = 0; d < y_dim; d++) pos[d] += D * (Y[bh_tree->treeTotal() + i][d] - Y[idx][d]);
         }
@@ -223,8 +225,8 @@ namespace tsne{
     template<typename T>
     T TSNE<T>::computeSumQ(T theta) {
         T sum_Q = .0;
-        if(bh_tree){
-            size_t bh_size = bh_tree->treeTotal();
+        size_t bh_size = bh_tree->treeTotal();
+        if(bh_size > 0){
             std::unique_ptr<T[]> neg_f = std::unique_ptr<T[]>(new T[bh_size * y_dim]());
             T sum_q = .0;
 #pragma omp parallel for reduction(+:sum_Q)
@@ -252,6 +254,7 @@ namespace tsne{
 
     template<typename T>
     void TSNE<T>::zeroMean(size_t n, T **y) {
+        if(n == 1) return;
         size_t i;
         ushort d;
         std::unique_ptr<T[]> mean_ = std::unique_ptr<T[]>(new T[y_dim]());
@@ -262,12 +265,6 @@ namespace tsne{
         }
         for(d = 0; d < y_dim; d++) mean_[d] /= n;
 
-//        if(bh_tree && bh_tree->treeTotal() > 0){
-//            T* bh_mean = bh_tree->treeMean();
-//            T mult1 = (T)bh_tree->treeTotal() /(T) n_total;
-//            T mult2 = (T)n / (T)n_total;
-//            for(d = 0; d < y_dim; d++) mean_[d] = bh_mean[d] * mult1 + mean_[d] * mult2;
-//        }
         for(i = 0; i < n; i++){
             for(d = 0; d < y_dim; d++){
                 y[i][d] -= mean_[d];
@@ -278,7 +275,12 @@ namespace tsne{
     template<typename T>
     void TSNE<T>::runTraining(size_t n, T perplexity, T theta,
                               int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret) {
-        if (n_total - 1 < 3 * perplexity) {
+        if(n_total < 4){
+            if (verbose)
+                fprintf(stdout, "Dataset Is Too Small(%d)...\n", n_total);
+            return;
+        }
+        else if (n_total - 1 < 3 * perplexity) {
             perplexity = T(n_total - 1) / 3.;
             if (verbose)
                 fprintf(stdout, "Perplexity too large for the number of data points! Adjusting To %f ...\n", perplexity);
@@ -287,7 +289,7 @@ namespace tsne{
         time_t start, end;
         T momentum = .5, final_momentum = .8;
         T eta = 200.0;
-        size_t bh_size = bh_tree ? bh_tree->treeTotal(): 0;
+        size_t bh_size = bh_tree->treeTotal();
         if (verbose)
             fprintf(stdout, "Using no_dims = %d, perplexity = %f, and theta = %f\n", y_dim, perplexity, theta);
         std::unique_ptr<T[]> dY(new T[n * y_dim]);
@@ -315,7 +317,7 @@ namespace tsne{
 
             bool need_eval_error = (verbose && ((iter > 0 && iter % 50 == 0) || (iter == max_iter - 1)));
 
-            T error = computeGradient(theta, sum_Q, val_P.get(), dY.get());
+            T error = computeGradient(theta, sum_Q, val_P.get(), dY.get(), need_eval_error);
             updateGradient(n, eta, momentum, dY.get(), uY.get(), gains.get(), Y.data() + bh_size);
             zeroMean(n, Y.data() + bh_size);
 
@@ -356,9 +358,9 @@ namespace tsne{
             }
         }
         delete bh_tree;
-        bh_tree = nullptr;
+        bh_tree = new BarnesHutTree<T>(y_dim);
         runTraining(n_total, perplexity, theta, max_iter, stop_lying_iter, mom_switch_iter, ret);
-        bh_tree = new BarnesHutTree<T>(n_total, y_dim, Y.data());
+        bh_tree->insert(n_total, Y.data());
     }
 
     template<typename T>
