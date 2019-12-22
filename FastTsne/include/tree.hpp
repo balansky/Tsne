@@ -16,10 +16,13 @@ class RedBlackTree{
 private:
     enum Color {RED, BLACK};
 
+    ushort dim;
+    size_t n_total;
+
     struct Node{
         T radius;
-        T *v;
         bool color;
+        T *v;
         Node *left;
         Node *right;
         Node *parent;
@@ -37,10 +40,9 @@ private:
         }
     } *_root;
 
-    ushort dim;
-    std::vector<Node*> data;
-    size_t n_total;
     T *_mean;
+
+    std::vector<Node*> data;
 
 protected:
 
@@ -231,7 +233,7 @@ protected:
     }
 
 public:
-    RedBlackTree(): n_total(0), dim(0), _root(nullptr), _mean(nullptr){}
+    RedBlackTree(): dim(0), n_total(0), _root(nullptr), _mean(nullptr){}
     explicit RedBlackTree(ushort dim): RedBlackTree(){
         this->dim = dim;
         _mean = new T[dim]();

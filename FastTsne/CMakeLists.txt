@@ -1,6 +1,7 @@
-PROJECT(tsne_multicore CXX)
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8 FATAL_ERROR)
-CMAKE_POLICY(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0.0)
+project(tsne VERSION 0.1.0)
+
+set(CMAKE_CXX_STANDARD 11)
 
 SET(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" "${CMAKE_MODULE_PATH}")
 
@@ -22,6 +23,19 @@ ELSE()
     MESSAGE(WARNING "Not using OpenMP. Performance will suffer.")
 ENDIF()
 
-FILE(GLOB src *.cpp)
 
-ADD_LIBRARY(tsne_multicore SHARED ${src})
+file(GLOB_RECURSE SOURCES "src/*.cpp")
+set(PROJECT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+
+include(CTest)
+enable_testing()
+
+include_directories(${PROJECT_INCLUDE_DIR})
+
+add_library(tsne ${SOURCES})
+
+#add_subdirectory(test)
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)

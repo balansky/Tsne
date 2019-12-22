@@ -61,8 +61,8 @@ class TSNE{
 
     struct DynamicMatrix{
 
-        size_t n_row;
         size_t n;
+        size_t n_row;
         std::unordered_map<size_t, T> *rows;
 
         DynamicMatrix(): n(0), n_row(0), rows(nullptr){}
