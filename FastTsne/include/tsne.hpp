@@ -159,6 +159,8 @@ class TSNE{
 
     void run(size_t n, T *x, T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
 
+    size_t total(){return n_total;}
+
 };
 
 }

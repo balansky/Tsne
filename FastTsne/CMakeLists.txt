@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(tsne VERSION 0.1.0)
+project(FastTsne VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -32,7 +32,7 @@ enable_testing()
 
 include_directories(${PROJECT_INCLUDE_DIR})
 
-add_library(tsne ${SOURCES})
+add_library(FastTsne SHARED ${SOURCES})
 
 #add_subdirectory(test)
 
