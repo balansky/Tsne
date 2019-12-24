@@ -4,7 +4,7 @@ from libcpp cimport bool
 import numpy as np
 cimport numpy as np
 
-from fast_tsne cimport TSNE
+from PyFastTsne cimport TSNE
 
 cdef class PyTsne:
 
