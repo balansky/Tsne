@@ -1,22 +1,12 @@
 # distutils: language = c++
-from libcpp cimport bool
 
-import threading
-import sys
+from libcpp cimport bool
+from cysignals.signals cimport sig_on, sig_off
 
 import numpy as np
 cimport numpy as np
 
 from PyFastTsne cimport TSNE
-
-class FuncThread(threading.Thread):
-    def __init__(self, target, *args):
-        threading.Thread.__init__(self)
-        self._target = target
-        self._args = args
-
-    def run(self):
-        self._target(*self._args)
 
 
 cdef class PyTsne:
@@ -58,6 +48,8 @@ cdef class PyTsne:
 
         if(not x.flags["C_CONTIGUOUS"]):
             x = np.ascontiguousarray(x, dtype=np.float64)
+
+        sig_on()
         if(y is None):
             self.c_tsne.run(n, <double*>x.data, self.learning_rate, self.perplexity, self.theta, self.n_iter, self.stop_lying_iter, self.mom_switch_iter, <double*>arr.data)
 
@@ -67,6 +59,8 @@ cdef class PyTsne:
                 y = np.ascontiguousarray(y, dtype=np.float64)
             self.c_tsne.insertItems(n, <double*>x.data, <double*>y.data)
             self.c_tsne.run(self.learning_rate, self.perplexity, self.theta, self.n_iter, self.stop_lying_iter, self.mom_switch_iter, False, <double*>arr.data)
+
+        sig_off()
         return arr
 
 
