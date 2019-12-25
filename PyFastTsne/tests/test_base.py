@@ -25,7 +25,7 @@ class TestPyFastTSNE(TestCase):
     def test_tsne(self):
         X, y = self.Xy
         tsne = PyTsne(100, 2)
-        E = tsne.run(X)
+        E = tsne.fit_transform(X)
 
         self.assertEqual(E.shape, (X.shape[0], 2))
 
@@ -35,3 +35,14 @@ class TestPyFastTSNE(TestCase):
                                               E[y == 1]).min()
 
         self.assertGreater(min_intercluster, max_intracluster)
+
+    def test_benchmark(self):
+        for N in [1000, 10000, 100000]:
+            for D in [10, 100, 1000, 10000]:
+
+                print ('=====================')
+                print ('N: %d, D: %d' % (N, D))
+                print ('=====================')
+                X = np.random.rand(N, D)
+                tsne = PyTsne(D, 2)
+                mnist_tsne = tsne.fit_transform(X)

@@ -1,11 +1,23 @@
 # distutils: language = c++
 from libcpp cimport bool
 
+import threading
+import sys
 
 import numpy as np
 cimport numpy as np
 
 from PyFastTsne cimport TSNE
+
+class FuncThread(threading.Thread):
+    def __init__(self, target, *args):
+        threading.Thread.__init__(self)
+        self._target = target
+        self._args = args
+
+    def run(self):
+        self._target(*self._args)
+
 
 cdef class PyTsne:
 
@@ -39,20 +51,20 @@ cdef class PyTsne:
 
     def fit_transform(self, np.ndarray[double, ndim=2] x not None, np.ndarray[double, ndim=2] y = None):
         cdef size_t n = x.shape[0]
-        cdef np.ndarray arr = np.zeros((n, self.y_dim))
+        cdef np.ndarray arr = np.zeros((n, self.y_dim), dtype=np.float64, order='C')
 
         del self.c_tsne
         self.c_tsne = new TSNE[double](self.x_dim, self.y_dim, self.verbose)
 
         if(not x.flags["C_CONTIGUOUS"]):
-            x = np.asarray(x, order='C')
+            x = np.ascontiguousarray(x, dtype=np.float64)
         if(y is None):
             self.c_tsne.run(n, <double*>x.data, self.learning_rate, self.perplexity, self.theta, self.n_iter, self.stop_lying_iter, self.mom_switch_iter, <double*>arr.data)
 
         else:
             assert x.shape[0] == y.shape[0], "Number of X must equal To Y"
             if(not y.flags["C_CONTIGUOUS"]):
-                y = np.asarray(y, order='C')
+                y = np.ascontiguousarray(y, dtype=np.float64)
             self.c_tsne.insertItems(n, <double*>x.data, <double*>y.data)
             self.c_tsne.run(self.learning_rate, self.perplexity, self.theta, self.n_iter, self.stop_lying_iter, self.mom_switch_iter, False, <double*>arr.data)
         return arr
@@ -69,10 +81,9 @@ cdef class PyTsne:
 
         cdef size_t n = x.shape[0]
         if(not x.flags["C_CONTIGUOUS"]):
-            x = np.asarray(x, order='C')
-
+            x = np.ascontiguousarray(x, dtype=np.float64)
         if(not y.flags["C_CONTIGUOUS"]):
-            y = np.asarray(y, order='C')
+            y = np.ascontiguousarray(y, dtype=np.float64)
         self.c_tsne.run(n, <double*>x.data, self.learning_rate, self.perplexity, self.theta, n_iter, stop_lying_iter, mom_switch_iter, <double*>y.data)
         return self
 

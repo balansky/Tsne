@@ -1,13 +1,13 @@
 #define BOOST_TEST_MODULE MyTest
 
 #include <boost/test/unit_test.hpp>
-#include <boost/range/numeric.hpp>
 #include <boost/random/uniform_real_distribution.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <memory>
-#include <iostream>
-#include <cfloat>
 #include <tsne.hpp>
+#include "multicore_tsne/tsne.h"
+#include "multicore_tsne/splittree.h"
+#include "multicore_tsne/vptree.h"
 
 
 BOOST_AUTO_TEST_SUITE(tsne_test)
@@ -15,19 +15,35 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
     boost::random::mt19937 gen;
 
     BOOST_AUTO_TEST_CASE(tsne_run){
-        int nx = 70000;
-        ushort x_dim = 784;
+        int nx = 1000;
+        ushort x_dim = 128;
         ushort y_dim = 2;
-        std::unique_ptr<float[]> rnd_x = std::unique_ptr<float[]>(new float[nx*x_dim]);
-        std::unique_ptr<float[]> y_ret = std::unique_ptr<float[]>(new float[nx*y_dim]);
-        boost::random::uniform_real_distribution<float> dist(0, 1.0);
+        std::unique_ptr<double[]> rnd_x = std::unique_ptr<double[]>(new double[nx*x_dim]);
+        std::unique_ptr<double[]> y_ret = std::unique_ptr<double[]>(new double[nx*y_dim]);
+        std::unique_ptr<double[]> y_org = std::unique_ptr<double[]>(new double[nx*y_dim]);
+        boost::random::uniform_real_distribution<double> dist(0, 1.0);
 
         for(size_t i = 0; i < nx*x_dim; i++) rnd_x[i] = dist(gen);
 
-        tsne::TSNE<float> ts(x_dim, y_dim, true);
+        tsne::TSNE<double> ts(x_dim, y_dim, true);
 
         ts.run(nx, rnd_x.get(), 200, 30, 0.5, 1000, 250, 250,
                 y_ret.get());
+
+    }
+
+
+    BOOST_AUTO_TEST_CASE(multicore_tsne_run){
+        int nx = 1000;
+        ushort x_dim = 128;
+        ushort y_dim = 2;
+        std::unique_ptr<double[]> rnd_x = std::unique_ptr<double[]>(new double[nx*x_dim]);
+        std::unique_ptr<double[]> y_ret = std::unique_ptr<double[]>(new double[nx*y_dim]);
+        boost::random::uniform_real_distribution<double> dist(0, 1.0);
+
+        for(size_t i = 0; i < nx*x_dim; i++) rnd_x[i] = dist(gen);
+        TSNE<SplitTree, euclidean_distance_squared> tsne;
+        tsne.run(rnd_x.get(), nx, x_dim, y_ret.get(), 2, 30, 0.5, -1, 1000, 250, 0, false, 1);
 
     }
 
