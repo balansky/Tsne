@@ -143,7 +143,7 @@ class TSNE{
     void computeEdgeForces(size_t i, tsne::TSNE<T>::Matrix *val_P, T *pos, T &i_sum_P, T &C, bool eval);
     void searchGaussianPerplexity(size_t k, T perplexity, T *dist, T *cur_P);
     void computeGaussianPerplexity(size_t k, T perplexity, tsne::TSNE<T>::DynamicMatrix *dynamic_val_P);
-    void runTraining(size_t n, T perplexity, T theta,
+    void runTraining(size_t n, T eta, T perplexity, T theta,
             int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
 
     public:
@@ -155,9 +155,9 @@ class TSNE{
 
     void insertItems(size_t n, T *x, T *y);
 
-    void run(T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
+    void run(T eta, T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, bool re_init, T *ret);
 
-    void run(size_t n, T *x, T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
+    void run(size_t n, T *x, T eta, T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret);
 
     size_t total(){return n_total;}
 

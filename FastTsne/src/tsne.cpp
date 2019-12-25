@@ -23,7 +23,7 @@ namespace tsne{
     }
 
     template<typename T>
-    static double randn() {
+    static inline double randn() {
         T x, y, radius;
         do {
             x = 2 * (rand() / ((T) RAND_MAX + 1)) - 1;
@@ -122,8 +122,9 @@ namespace tsne{
         T max_v = maxValue(x_dim, X, rb_tree->treeMean());
 
         size_t bh_size = bh_tree->treeTotal();
+        int steps_completed = 0;
 
-#pragma omp parallel for default(none) shared(k, perplexity, bh_size, max_v, indices, distances, dynamic_val_P)
+#pragma omp parallel for default(none) shared(k, perplexity, bh_size, max_v, indices, distances, dynamic_val_P, steps_completed, stdout)
         for (size_t i = 0; i < n_total; i++) {
 
 //          Find nearest neighbors
@@ -144,6 +145,7 @@ namespace tsne{
                 std::unique_ptr<T[]> cur_P = std::unique_ptr<T[]>(new T[k]);
                 searchGaussianPerplexity(k, perplexity, dist, cur_P.get());
 
+
 #pragma omp critical
                 {
                     if (i >= bh_size) {
@@ -151,6 +153,11 @@ namespace tsne{
                     }
                     for (auto &var_point : var_points) {
                         dynamic_val_P->add(var_point.first - bh_size, i, cur_P[var_point.second]);
+                    }
+                    ++steps_completed;
+                    if (verbose && steps_completed % (n_total / 10) == 0)
+                    {
+                        fprintf(stdout, " - point %d of %lu\n", steps_completed, n_total);
                     }
                 }
             }
@@ -273,11 +280,11 @@ namespace tsne{
     }
 
     template<typename T>
-    void TSNE<T>::runTraining(size_t n, T perplexity, T theta,
+    void TSNE<T>::runTraining(size_t n, T eta, T perplexity, T theta,
                               int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret) {
         if(n_total < 4){
             if (verbose)
-                fprintf(stdout, "Dataset Is Too Small(%d)...\n", n_total);
+                fprintf(stdout, "Dataset Is Too Small(%lu)...\n", n_total);
             return;
         }
         else if (n_total - 1 < 3 * perplexity) {
@@ -288,10 +295,9 @@ namespace tsne{
         float total_time = .0;
         time_t start, end;
         T momentum = .5, final_momentum = .8;
-        T eta = 200.0;
         size_t bh_size = bh_tree->treeTotal();
         if (verbose)
-            fprintf(stdout, "Using no_dims = %d, perplexity = %f, and theta = %f\n", y_dim, perplexity, theta);
+            fprintf(stdout, "Using no_dims = %d, perplexity = %f, and theta = %f\nComputing input similarities... \n", y_dim, perplexity, theta);
         std::unique_ptr<T[]> dY(new T[n * y_dim]);
         std::unique_ptr<T[]> uY(new T[n * y_dim]());
         std::unique_ptr<T[]> gains(new T[n * y_dim]);
@@ -315,6 +321,7 @@ namespace tsne{
         start = time(0);
         for(int iter = 0; iter < max_iter; iter++) {
 
+//            fprintf(stdout, "Iteration %d \n", iter + 1);
             bool need_eval_error = (verbose && ((iter > 0 && iter % 50 == 0) || (iter == max_iter - 1)));
 
             T error = computeGradient(theta, sum_Q, val_P.get(), dY.get(), need_eval_error);
@@ -350,25 +357,27 @@ namespace tsne{
     }
 
     template<typename T>
-    void TSNE<T>::run(T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter,
+    void TSNE<T>::run(T eta, T perplexity, T theta, int max_iter, int stop_lying_iter, int mom_switch_iter, bool re_initial,
                       T *ret) {
-        for(size_t i = 0; i < n_total; i++){
-            for(ushort d = 0; d < y_dim; d++){
-                Y[i][d] = randn<T>();
+        if(re_initial){
+            for(size_t i = 0; i < n_total; i++){
+                for(ushort d = 0; d < y_dim; d++){
+                    Y[i][d] = randn<T>();
+                }
             }
         }
         delete bh_tree;
         bh_tree = new BarnesHutTree<T>(y_dim);
-        runTraining(n_total, perplexity, theta, max_iter, stop_lying_iter, mom_switch_iter, ret);
+        runTraining(n_total, eta, perplexity, theta, max_iter, stop_lying_iter, mom_switch_iter, ret);
         bh_tree->insert(n_total, Y.data());
     }
 
     template<typename T>
-    void TSNE<T>::run(size_t n, T *x, T perplexity, T theta, int max_iter, int stop_lying_iter,
+    void TSNE<T>::run(size_t n, T *x, T eta, T perplexity, T theta, int max_iter, int stop_lying_iter,
                       int mom_switch_iter, T *ret) {
         insertX(n, x);
         insertRandomY(n);
-        runTraining(n, perplexity, theta, max_iter, stop_lying_iter, mom_switch_iter, ret);
+        runTraining(n, eta, perplexity, theta, max_iter, stop_lying_iter, mom_switch_iter, ret);
         bh_tree->insert(n, Y.data() + bh_tree->treeTotal());
     }
 

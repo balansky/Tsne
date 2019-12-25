@@ -533,7 +533,7 @@ class BarnesHutTree{
     }
 
     void computeNonEdgeForces(const T *point, const T theta,  T *neg_f, T &sum_Q) const{
-        if(_root){
+        if(_root && _root->cum_size > 0){
             computeNonEdgeForces(point, _root, theta, neg_f, sum_Q);
         }
     }
