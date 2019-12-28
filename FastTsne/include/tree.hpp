@@ -463,6 +463,10 @@ class BarnesHutTree{
 
 	void computeNonEdgeForces(const T *point, const Cell *cell, const T theta, T* neg_f, T &sum_Q) const {
 
+//        if (cell->cum_size == 0 || (cell->is_leaf)) {
+//            return;
+//        }
+
         if (cell->cum_size == 0 || (cell->is_leaf && isDuplicate(cell->center_of_mass, point))) {
             return;
         }
@@ -475,7 +479,7 @@ class BarnesHutTree{
         }
 
         // Check whether we can use this node as a "summary"
-        T m = std::numeric_limits<T>::lowest();
+        T m = -1;
         for (int i = 0; i < dim; ++i) {
             m = std::max(m, cell->width[i]);
         }

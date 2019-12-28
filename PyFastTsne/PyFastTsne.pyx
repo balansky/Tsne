@@ -39,6 +39,7 @@ cdef class PyTsne:
         self.c_tsne = new TSNE[double](self.x_dim, self.y_dim, self.verbose)
 
 
+
     def fit_transform(self, np.ndarray[double, ndim=2] x not None, np.ndarray[double, ndim=2] y = None):
         cdef size_t n = x.shape[0]
         cdef np.ndarray arr = np.zeros((n, self.y_dim), dtype=np.float64, order='C')

@@ -200,6 +200,7 @@ namespace tsne{
             val_P_sum += i_p_sum;
             C += i_c;
         }
+
         // Compute final t-SNE gradient
         for(size_t i = 0; i < val_P->n_row * y_dim; i++) {
             dY[i] = pos_f[i] - (neg_f[i + bh_size*y_dim] / sum_Q);
@@ -235,9 +236,9 @@ namespace tsne{
         size_t bh_size = bh_tree->treeTotal();
         if(bh_size > 0){
             std::unique_ptr<T[]> neg_f = std::unique_ptr<T[]>(new T[bh_size * y_dim]());
-            T sum_q = .0;
 #pragma omp parallel for reduction(+:sum_Q)
             for(size_t i = 0; i < bh_size; i++){
+                T sum_q = .0;
                 bh_tree->computeNonEdgeForces(Y[i], theta, neg_f.get() + i*y_dim, sum_q);
                 sum_Q += sum_q;
             }
@@ -270,7 +271,7 @@ namespace tsne{
                 mean_[d] += y[i][d];
             }
         }
-        for(d = 0; d < y_dim; d++) mean_[d] /= n;
+        for(d = 0; d < y_dim; d++) mean_[d] /= (T)n;
 
         for(i = 0; i < n; i++){
             for(d = 0; d < y_dim; d++){
@@ -284,7 +285,7 @@ namespace tsne{
                               int max_iter, int stop_lying_iter, int mom_switch_iter, T *ret) {
         if(n_total < 4){
             if (verbose)
-                fprintf(stdout, "Dataset Is Too Small(%lu)...\n", n_total);
+                fprintf(stderr, "Dataset Is Too Small(%lu)...\n", n_total);
             return;
         }
         else if (n_total - 1 < 3 * perplexity) {
@@ -321,10 +322,12 @@ namespace tsne{
         start = time(0);
         for(int iter = 0; iter < max_iter; iter++) {
 
-//            fprintf(stdout, "Iteration %d \n", iter + 1);
             bool need_eval_error = (verbose && ((iter > 0 && iter % 50 == 0) || (iter == max_iter - 1)));
 
             T error = computeGradient(theta, sum_Q, val_P.get(), dY.get(), need_eval_error);
+//            end = time(0);
+//            fprintf(stderr, "Gradient in %4.2f seconds)\n", (float) (end - start) );
+
             updateGradient(n, eta, momentum, dY.get(), uY.get(), gains.get(), Y.data() + bh_size);
             zeroMean(n, Y.data() + bh_size);
 
@@ -340,7 +343,7 @@ namespace tsne{
                     fprintf(stdout, "Iteration %d: error is %f\n", iter + 1, error);
                 else {
                     total_time += (float) (end - start);
-                    fprintf(stdout, "Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter + 1, error, (float) (end - start) );
+                    fprintf(stdout, "Iteration %d: error is %f (50 iterations in %4.5f seconds)\n", iter + 1, error, (float) (end - start) );
                 }
                 start = time(0);
             }

@@ -184,7 +184,7 @@ void TSNE<treeT, dist_fn>::run(double* X, int N, int D, double* Y,
                 fprintf(stderr, "Iteration %d: error is %f\n", iter + 1, error);
             else {
                 total_time += (float) (end - start);
-                fprintf(stderr, "Iteration %d: error is %f (50 iterations in %4.2f seconds)\n", iter + 1, error, (float) (end - start) );
+                fprintf(stderr, "Iteration %d: error is %f (50 iterations in %4.4f seconds)\n", iter + 1, error, (float) (end - start) );
             }
             start = time(0);
         }
@@ -212,9 +212,10 @@ void TSNE<treeT, dist_fn>::run(double* X, int N, int D, double* Y,
 template <class treeT, double (*dist_fn)( const DataPoint&, const DataPoint&)>
 double TSNE<treeT, dist_fn>::computeGradient(int* inp_row_P, int* inp_col_P, double* inp_val_P, double* Y, int N, int no_dims, double* dC, double theta, bool eval_error)
 {
+
     // Construct quadtree on current map
     treeT* tree = new treeT(Y, N, no_dims);
-    
+
     // Compute all terms required for t-SNE gradient
     double* Q = new double[N];
     double* pos_f = new double[N * no_dims]();
@@ -226,7 +227,7 @@ double TSNE<treeT, dist_fn>::computeGradient(int* inp_row_P, int* inp_col_P, dou
     if (pos_f == NULL || neg_f == NULL) { 
         fprintf(stderr, "Memory allocation failed!\n"); exit(1); 
     }
-    
+
 #ifdef _OPENMP
     #pragma omp parallel for reduction(+:P_i_sum,C)
 #endif
@@ -266,6 +267,7 @@ double TSNE<treeT, dist_fn>::computeGradient(int* inp_row_P, int* inp_col_P, dou
     for (int i = 0; i < N; i++) {
         sum_Q += Q[i];
     }
+
 
     // Compute final t-SNE gradient
     for (int i = 0; i < N * no_dims; i++) {

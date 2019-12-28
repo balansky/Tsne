@@ -51,7 +51,7 @@ def get_mnist():
 def plot(Y, classes, name):
     digits = set(classes)
     fig = plt.figure()
-    colormap = plt.cm.spectral
+    colormap = plt.cm.get_cmap("Spectral")
     plt.gca().set_prop_cycle(
         cycler('color', [colormap(i) for i in np.linspace(0, 0.9, 10)]))
     ax = fig.add_subplot(111)

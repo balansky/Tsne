@@ -15,27 +15,30 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
     boost::random::mt19937 gen;
 
     BOOST_AUTO_TEST_CASE(tsne_run){
-        int nx = 1000;
-        ushort x_dim = 128;
+        int nx = 10000;
+        ushort x_dim = 728;
         ushort y_dim = 2;
         std::unique_ptr<double[]> rnd_x = std::unique_ptr<double[]>(new double[nx*x_dim]);
         std::unique_ptr<double[]> y_ret = std::unique_ptr<double[]>(new double[nx*y_dim]);
-        std::unique_ptr<double[]> y_org = std::unique_ptr<double[]>(new double[nx*y_dim]);
+//        std::unique_ptr<double[]> y_org = std::unique_ptr<double[]>(new double[nx*y_dim]);
         boost::random::uniform_real_distribution<double> dist(0, 1.0);
 
         for(size_t i = 0; i < nx*x_dim; i++) rnd_x[i] = dist(gen);
 
         tsne::TSNE<double> ts(x_dim, y_dim, true);
 
-        ts.run(nx, rnd_x.get(), 200, 30, 0.5, 1000, 250, 250,
+        ts.run(nx, rnd_x.get(), 200, 30, 0.5, 300, 250, 250,
                 y_ret.get());
+
+        TSNE<SplitTree, euclidean_distance_squared> tsne;
+        tsne.run(rnd_x.get(), nx, x_dim, y_ret.get(), 2, 30, 0.5, -1, 300, 250, 0, false, 1);
 
     }
 
 
     BOOST_AUTO_TEST_CASE(multicore_tsne_run){
-        int nx = 1000;
-        ushort x_dim = 128;
+        int nx = 10000;
+        ushort x_dim = 728;
         ushort y_dim = 2;
         std::unique_ptr<double[]> rnd_x = std::unique_ptr<double[]>(new double[nx*x_dim]);
         std::unique_ptr<double[]> y_ret = std::unique_ptr<double[]>(new double[nx*y_dim]);
@@ -43,7 +46,7 @@ BOOST_AUTO_TEST_SUITE(tsne_test)
 
         for(size_t i = 0; i < nx*x_dim; i++) rnd_x[i] = dist(gen);
         TSNE<SplitTree, euclidean_distance_squared> tsne;
-        tsne.run(rnd_x.get(), nx, x_dim, y_ret.get(), 2, 30, 0.5, -1, 1000, 250, 0, false, 1);
+        tsne.run(rnd_x.get(), nx, x_dim, y_ret.get(), 2, 30, 0.5, -1, 300, 250, 0, false, 1);
 
     }
 
