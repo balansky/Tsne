@@ -2,7 +2,7 @@
 
 This is a fork of [Multicore t-SNE](https://github.com/DmitryUlyanov/Multicore-TSNE) cython wrapper. This code has similar speed with Multicore t-SNE. In addition, support partial fitting function to continuously add points into tsne map.
 
-<center><img src="mnist-tsne.png" width="512"></center>
+<center><img src="mnist_tsne.png" width="512"></center>
 
 
 # How to use
